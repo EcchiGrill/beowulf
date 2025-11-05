@@ -1,11 +1,11 @@
 package com.beowulf.core.archiver;
 
-public class Archiver {
-    public String getGreeting() {
-        return "Hello World!";
-    }
+import java.io.IOException;
+import java.nio.file.Path;
 
-    public static void main(String[] args) {
-        System.out.println(new Archiver().getGreeting());
-    }
+public interface Archiver {
+    void compress(Path sourceDir, Path targetArchive) throws IOException;
+    void decompress(Path archive, Path targetDir) throws IOException;
+
+    String getName();
 }

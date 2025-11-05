@@ -1,0 +1,32 @@
+package com.beowulf.core;
+
+import com.beowulf.core.archiver.ZipArchiver;
+import org.junit.jupiter.api.Test;
+import java.nio.file.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+class ZipArchiverTest {
+    @Test
+    void roundTripCompression() throws Exception {
+        Path inputDir = Files.createTempDirectory("beowulf-in-dir");
+        Path file = inputDir.resolve("compress-me.txt");
+        String content = "Compress me in, Beowulf!";
+        Files.writeString(file, content);
+
+        Path archive = Files.createTempFile("beowulf-archive", ".zip");
+        Path outputDir = Files.createTempDirectory("beowulf-out-dir");
+
+        ZipArchiver archiver = new ZipArchiver();
+        archiver.compress(inputDir, archive);
+        archiver.decompress(archive, outputDir);
+
+        Path extractedFile = outputDir.resolve("compress-me.txt");
+
+        assertTrue(Files.exists(archive), "Archive should exist after compression");
+        assertTrue(Files.exists(extractedFile), "File should exist after decompression");
+
+        String extractedContent = Files.readString(extractedFile);
+        assertEquals(content, extractedContent, "Decompressed file content should match original");
+    }
+}

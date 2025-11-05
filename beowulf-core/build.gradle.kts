@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    implementation("org.apache.commons:commons-compress:1.26.0")
+    implementation("org.apache.commons:commons-compress:1.27.0")
 }

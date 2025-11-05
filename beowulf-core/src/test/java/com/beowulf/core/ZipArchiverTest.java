@@ -1,10 +1,12 @@
 package com.beowulf.core;
 
 import com.beowulf.core.archiver.ZipArchiver;
+
 import org.junit.jupiter.api.Test;
-import java.nio.file.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.nio.file.*;
 
 class ZipArchiverTest {
     @Test

@@ -28,7 +28,9 @@ public class ZipArchiver implements Archiver {
                             IOUtils.copy(inputStream, zipArchiveOutputStream);
                             zipArchiveOutputStream.closeArchiveEntry();
                         } catch (IOException e) {
-                            throw new UncheckedIOException(e);
+                            throw new UncheckedIOException(
+                                    "ZIP compression failed for " + sourceDir + " -> " + targetArchive,
+                                    e);
                         }
                     });
 

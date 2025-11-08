@@ -28,7 +28,9 @@ public class TarArchiver implements Archiver {
                             IOUtils.copy(inputStream, tarArchiveOutputStream);
                             tarArchiveOutputStream.closeArchiveEntry();
                         } catch (IOException e) {
-                            throw new UncheckedIOException(e);
+                            throw new UncheckedIOException(
+                                    "TAR compression failed for " + sourceDir + " -> " + targetArchive,
+                                    e);
                         }
                     });
 

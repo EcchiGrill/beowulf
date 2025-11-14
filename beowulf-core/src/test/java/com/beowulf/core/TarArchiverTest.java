@@ -17,7 +17,7 @@ class TarArchiverTest {
         String content = "Compress me in, Beowulf!";
         Files.writeString(file, content);
 
-        Path archive = Files.createTempFile("beowulf-archive", ".tar");
+        Path archive = Files.createTempFile("beowulf-archive", ".tar.gz");
         Path outputDir = Files.createTempDirectory("beowulf-out-dir");
 
         TarArchiver archiver = new TarArchiver();

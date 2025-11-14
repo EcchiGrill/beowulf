@@ -2,14 +2,14 @@ package com.beowulf.core;
 
 import org.junit.jupiter.api.Test;
 
-import com.beowulf.core.strategy.TarArchiver;
+import com.beowulf.core.strategy.TarGzArchiver;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.*;
 
-class TarArchiverTest {
+class TarGzArchiverTest {
     @Test
     void roundTripCompression() throws Exception {
         Path inputDir = Files.createTempDirectory("beowulf-in-dir");
@@ -20,7 +20,7 @@ class TarArchiverTest {
         Path archive = Files.createTempFile("beowulf-archive", ".tar.gz");
         Path outputDir = Files.createTempDirectory("beowulf-out-dir");
 
-        TarArchiver archiver = new TarArchiver();
+        TarGzArchiver archiver = new TarGzArchiver();
         archiver.compress(inputDir, archive);
         archiver.decompress(archive, outputDir);
 

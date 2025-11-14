@@ -1,13 +1,13 @@
 package com.beowulf.core.strategy;
 
-import com.beowulf.core.adapter.ZipAdapter;
+import com.beowulf.core.adapter.TarGzAdapter;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
-public class ZipArchiver implements Archiver {
+public class TarGzArchiver implements Archiver {
 
-    private final ZipAdapter adapter = new ZipAdapter();
+    private final TarGzAdapter adapter = new TarGzAdapter();
 
     @Override
     public void compress(Path sourceDir, Path targetArchive) throws IOException {
@@ -21,6 +21,6 @@ public class ZipArchiver implements Archiver {
 
     @Override
     public String getName() {
-        return "ZIP";
+        return "TAR";
     }
 }

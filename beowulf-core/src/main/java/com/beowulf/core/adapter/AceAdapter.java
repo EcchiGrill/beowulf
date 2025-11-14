@@ -7,15 +7,20 @@ import java.util.*;
 public class AceAdapter {
 
     /**
-     * Extracts ACE archive using external "unace" tool.
+     * Extracts .ace archive using external "unace" tool.
      * Requires user to have unace installed on their OS.
      * 
-     * @param archive   path to existing ACE archive
-     * @param targetDir destination directory
+     * @param archive   path to existing .ace archive.
+     * @param targetDir destination directory.
      */
     public void decompress(Path archive, Path targetDir) throws IOException {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(targetDir, "targetDir");
+
+        if (!Files.exists(archive)) {
+            throw new FileNotFoundException("Archive file not found: " + archive);
+        }
+
         Files.createDirectories(targetDir);
 
         String unace = findUnaceBinary()
@@ -35,7 +40,7 @@ public class AceAdapter {
         cmd.add(archive.toAbsolutePath().toString());
         cmd.add(targetDir.toAbsolutePath().toString() + File.separator);
 
-        runProcess(cmd, targetDir.toFile());
+        runProcess(cmd);
     }
 
     private Optional<String> findUnaceBinary() {
@@ -53,10 +58,10 @@ public class AceAdapter {
 
     private boolean isOnPath(String binary) {
         try {
-            Process p = new ProcessBuilder(binary).start();
-            p.destroy();
+            Process process = new ProcessBuilder(binary).start();
+            process.destroy();
             return true;
-        } catch (IOException ignored) {
+        } catch (IOException error) {
             return false;
         }
     }
@@ -66,30 +71,29 @@ public class AceAdapter {
         return os.contains("win");
     }
 
-    private void runProcess(List<String> command, File workingDir) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.directory(workingDir);
-        pb.redirectErrorStream(true);
+    private void runProcess(List<String> command) throws IOException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.redirectErrorStream(true);
 
-        Process p = pb.start();
+        Process process = processBuilder.start();
 
-        StringBuilder out = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
-            while ((line = r.readLine()) != null) {
-                out.append(line).append(System.lineSeparator());
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append(System.lineSeparator());
             }
         }
 
         try {
-            int exit = p.waitFor();
+            int exit = process.waitFor();
             if (exit != 0) {
-                throw new IOException("unace failed with exit code " + exit + "\nOutput:\n" + out);
+                throw new IOException("ACE failed (exit " + exit + "):\n" + output);
             }
-        } catch (InterruptedException e) {
-            p.destroyForcibly();
+        } catch (InterruptedException error) {
+            process.destroyForcibly();
             Thread.currentThread().interrupt();
-            throw new IOException("unace interrupted", e);
+            throw new IOException("ACE interrupted", error);
         }
     }
 }

@@ -7,18 +7,18 @@ import java.util.*;
 public class AceAdapter {
 
     /**
-     * Extracts ACE archive using external "unace" tool.
+     * Extracts .ace archive using external "unace" tool.
      * Requires user to have unace installed on their OS.
      * 
-     * @param archive   path to existing ACE archive
-     * @param targetDir destination directory
+     * @param archive   path to existing .ace archive.
+     * @param targetDir destination directory.
      */
     public void decompress(Path archive, Path targetDir) throws IOException {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(targetDir, "targetDir");
 
         if (!Files.exists(archive)) {
-            throw new FileNotFoundException("ACE file not found: " + archive);
+            throw new FileNotFoundException("Archive file not found: " + archive);
         }
 
         Files.createDirectories(targetDir);

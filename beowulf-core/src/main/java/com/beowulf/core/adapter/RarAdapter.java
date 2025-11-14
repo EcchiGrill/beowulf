@@ -7,10 +7,11 @@ import java.util.*;
 public class RarAdapter {
 
     /**
-     * Compresses sourceDir into a .rar archive using external rar tool.
+     * Compresses sourceDir into a .rar archive using external "rar" tool.
+     * Requires user to have rar installed on their OS.
      * 
-     * @param sourceDir     path to file or directory to compress
-     * @param targetArchive path to resulting archive file (.zip, .tar, etc.)
+     * @param sourceDir     path to file or directory to compress.
+     * @param targetArchive path to resulting .rar file.
      */
     public void compress(Path sourceDir, Path targetArchive) throws IOException {
         Objects.requireNonNull(sourceDir, "sourceDir");
@@ -22,12 +23,13 @@ public class RarAdapter {
 
         String rar = findRarBinary()
                 .orElseThrow(() -> new IOException("""
-                        'rar' binary not found on PATH.
+                        'rar' binary is not installed or not in PATH.
 
-                        Please install WinRAR (Windows) or RAR for Linux/Mac:
-                          • Arch Linux:     sudo pacman -S rar
-                          • Debian/Ubuntu:  install manually from rarlab.com
+                        Please install it manually:
+                          • Arch Linux:     yay -S rar
+                          • Debian/Ubuntu:  Download 'rarlinux' package from https://rarlab.com and install manually
                           • macOS:          brew install --cask rar
+                          • Windows:        Install WinRAR (includes rar.exe)
                         """));
 
         List<String> cmd = new ArrayList<>();
@@ -41,17 +43,18 @@ public class RarAdapter {
     }
 
     /**
-     * Extracts a RAR archive using "rar x"
+     * Extracts a .rar archive using "rar x".
+     * Requires user to have rar installed on their OS.
      * 
-     * @param archive   path to existing archive
-     * @param targetDir destination directory
+     * @param archive   path to existing .rar archive.
+     * @param targetDir destination directory.
      */
     public void decompress(Path archive, Path targetDir) throws IOException {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(targetDir, "targetDir");
 
         if (!Files.exists(archive)) {
-            throw new FileNotFoundException("RAR file not found: " + archive);
+            throw new FileNotFoundException("Archive file not found: " + archive);
         }
 
         Files.createDirectories(targetDir);

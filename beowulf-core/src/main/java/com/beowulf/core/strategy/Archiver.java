@@ -1,4 +1,4 @@
-package com.beowulf.core.archiver;
+package com.beowulf.core.strategy;
 
 import java.io.IOException;
 import java.nio.file.Path;

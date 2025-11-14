@@ -1,4 +1,4 @@
-package com.beowulf.core.archiver;
+package com.beowulf.core.strategy;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
@@ -27,8 +27,10 @@ public class ZipArchiver implements Archiver {
                             zipArchiveOutputStream.putArchiveEntry(entry);
                             IOUtils.copy(inputStream, zipArchiveOutputStream);
                             zipArchiveOutputStream.closeArchiveEntry();
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
+                        } catch (IOException error) {
+                            throw new UncheckedIOException(
+                                    "ZIP compression failed for " + sourceDir + " -> " + targetArchive,
+                                    error);
                         }
                     });
 

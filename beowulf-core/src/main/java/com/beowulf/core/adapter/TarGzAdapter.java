@@ -32,8 +32,6 @@ public class TarGzAdapter {
                 GZIPOutputStream gzipOutputStream = new GZIPOutputStream(bufferedOutputStream);
                 TarArchiveOutputStream tarArchiveOutputStream = new TarArchiveOutputStream(gzipOutputStream)) {
 
-            tarArchiveOutputStream.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
-
             Files.walk(sourceDir)
                     .filter(Files::isRegularFile)
                     .forEach(path -> {

@@ -1,4 +1,4 @@
-package com.beowulf.core.archiver;
+package com.beowulf.core.strategy;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -27,10 +27,10 @@ public class TarArchiver implements Archiver {
                             tarArchiveOutputStream.putArchiveEntry(entry);
                             IOUtils.copy(inputStream, tarArchiveOutputStream);
                             tarArchiveOutputStream.closeArchiveEntry();
-                        } catch (IOException e) {
+                        } catch (IOException error) {
                             throw new UncheckedIOException(
                                     "TAR compression failed for " + sourceDir + " -> " + targetArchive,
-                                    e);
+                                    error);
                         }
                     });
 

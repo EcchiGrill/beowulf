@@ -1,8 +1,9 @@
 package com.beowulf.core;
 
-import com.beowulf.core.archiver.ZipArchiver;
-
 import org.junit.jupiter.api.Test;
+
+import com.beowulf.core.strategy.ZipArchiver;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

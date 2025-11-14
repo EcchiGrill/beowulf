@@ -1,8 +1,9 @@
 package com.beowulf.core;
 
-import com.beowulf.core.archiver.TarArchiver;
-
 import org.junit.jupiter.api.Test;
+
+import com.beowulf.core.strategy.TarArchiver;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

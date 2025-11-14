@@ -1,7 +1,9 @@
-package com.beowulf.core.archiver;
+package com.beowulf.core.strategy;
 
 import com.github.junrar.Junrar;
 import com.github.junrar.exception.RarException;
+import com.github.junrar.exception.UnsupportedRarV5Exception;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,8 +21,10 @@ public class RarArchiver implements Archiver {
 
         try {
             Junrar.extract(archive.toFile(), targetDir.toFile());
-        } catch (RarException e) {
-            throw new IOException("RAR extraction failed for " + archive + " -> " + targetDir, e);
+        } catch (UnsupportedRarV5Exception unsupportedError) {
+            throw new IOException("RAR5 format is not supported for now.", unsupportedError);
+        } catch (RarException error) {
+            throw new IOException("RAR extraction failed for " + archive + " -> " + targetDir, error);
         }
     }
 

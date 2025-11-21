@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: beowulf-postgres
+    environment:
+      POSTGRES_USER: beowulf
+      POSTGRES_PASSWORD: beowulf
+      POSTGRES_DB: beowulf_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  beowulf:
+    build: .
+    container_name: beowulf-cli
+    depends_on:
+      - postgres
+    volumes:
+      - ./data:/data
+      - beowulf_user_data:/root/.beowulf
+    entrypoint: ["./beowulf-cli/bin/beowulf-cli"]
+
+volumes:
+  pg_data:
+  beowulf_user_data:

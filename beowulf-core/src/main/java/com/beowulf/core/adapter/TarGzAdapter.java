@@ -27,23 +27,45 @@ public class TarGzAdapter {
         if (!Files.exists(sourceDir))
             throw new FileNotFoundException("Source directory not found: " + sourceDir);
 
+        Path parent = sourceDir.getParent();
+        Path base = parent != null ? parent : sourceDir;
+
         try (OutputStream filOutputStream = Files.newOutputStream(targetArchive);
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(filOutputStream);
                 GZIPOutputStream gzipOutputStream = new GZIPOutputStream(bufferedOutputStream);
                 TarArchiveOutputStream tarArchiveOutputStream = new TarArchiveOutputStream(gzipOutputStream)) {
 
-            Files.walk(sourceDir)
-                    .filter(Files::isRegularFile)
-                    .forEach(path -> {
-                        String entryName = sourceDir.relativize(path).toString();
+            tarArchiveOutputStream.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
 
-                        try (InputStream in = Files.newInputStream(path)) {
-                            TarArchiveEntry entry = new TarArchiveEntry(path.toFile(), entryName);
-                            tarArchiveOutputStream.putArchiveEntry(entry);
-                            IOUtils.copy(in, tarArchiveOutputStream);
-                            tarArchiveOutputStream.closeArchiveEntry();
-                        } catch (IOException error) {
-                            throw new UncheckedIOException("TAR.GZ compression failed", error);
+            Files.walk(sourceDir)
+                    .forEach(path -> {
+                        try {
+                            Path relativePath = base.relativize(path);
+                            String entryName = relativePath.toString().replace(File.separatorChar, '/');
+
+                            if (entryName.isEmpty()) {
+                                return;
+                            }
+
+                            if (Files.isDirectory(path)) {
+                                if (!entryName.endsWith("/")) {
+                                    entryName = entryName + "/";
+                                }
+
+                                TarArchiveEntry dirEntry = new TarArchiveEntry(entryName);
+                                dirEntry.setModTime(Files.getLastModifiedTime(path).toMillis());
+                                tarArchiveOutputStream.putArchiveEntry(dirEntry);
+                                tarArchiveOutputStream.closeArchiveEntry();
+                            } else {
+                                TarArchiveEntry fileEntry = new TarArchiveEntry(path.toFile(), entryName);
+                                tarArchiveOutputStream.putArchiveEntry(fileEntry);
+                                try (InputStream in = Files.newInputStream(path)) {
+                                    IOUtils.copy(in, tarArchiveOutputStream);
+                                }
+                                tarArchiveOutputStream.closeArchiveEntry();
+                            }
+                        } catch (IOException e) {
+                            throw new UncheckedIOException("TAR.GZ compression failed", e);
                         }
                     });
 

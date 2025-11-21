@@ -24,7 +24,8 @@ class ZipArchiverTest {
         archiver.compress(inputDir, archive);
         archiver.decompress(archive, outputDir);
 
-        Path extractedFile = outputDir.resolve("compress-me.txt");
+        Path extractedRootDir = outputDir.resolve(inputDir.getFileName());
+        Path extractedFile = extractedRootDir.resolve("compress-me.txt");
 
         assertTrue(Files.exists(archive), "Archive should exist after compression");
         assertTrue(Files.exists(extractedFile), "File should exist after decompression");

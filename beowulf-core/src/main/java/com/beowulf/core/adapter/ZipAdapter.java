@@ -26,20 +26,41 @@ public class ZipAdapter {
             throw new FileNotFoundException("Source directory not found: " + sourceDir);
         }
 
+        Path parent = sourceDir.getParent();
+        Path base = parent != null ? parent : sourceDir;
+
         try (OutputStream outputStream = Files.newOutputStream(targetArchive);
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
                 ZipArchiveOutputStream zipArchiveOutputStream = new ZipArchiveOutputStream(bufferedOutputStream)) {
 
-            Files.walk(sourceDir)
-                    .filter(Files::isRegularFile)
-                    .forEach(path -> {
-                        String entryName = sourceDir.relativize(path).toString();
+            zipArchiveOutputStream.setLevel(ZipArchiveOutputStream.STORED);
 
-                        try (InputStream fileInputStream = Files.newInputStream(path)) {
-                            ZipArchiveEntry entry = new ZipArchiveEntry(entryName);
-                            zipArchiveOutputStream.putArchiveEntry(entry);
-                            IOUtils.copy(fileInputStream, zipArchiveOutputStream);
-                            zipArchiveOutputStream.closeArchiveEntry();
+            Files.walk(sourceDir)
+                    .forEach(path -> {
+                        try {
+                            Path relativePath = base.relativize(path);
+                            String entryName = relativePath.toString().replace(File.separatorChar, '/');
+
+                            if (entryName.isEmpty()) {
+                                return;
+                            }
+
+                            if (Files.isDirectory(path)) {
+                                if (!entryName.endsWith("/")) {
+                                    entryName = entryName + "/";
+                                }
+                                ZipArchiveEntry dirEntry = new ZipArchiveEntry(entryName);
+                                dirEntry.setTime(Files.getLastModifiedTime(path).toMillis());
+                                zipArchiveOutputStream.putArchiveEntry(dirEntry);
+                                zipArchiveOutputStream.closeArchiveEntry();
+                            } else {
+                                try (InputStream fileInputStream = Files.newInputStream(path)) {
+                                    ZipArchiveEntry entry = new ZipArchiveEntry(entryName);
+                                    zipArchiveOutputStream.putArchiveEntry(entry);
+                                    IOUtils.copy(fileInputStream, zipArchiveOutputStream);
+                                    zipArchiveOutputStream.closeArchiveEntry();
+                                }
+                            }
                         } catch (IOException error) {
                             throw new UncheckedIOException("ZIP compression failed", error);
                         }

@@ -1,16 +1,39 @@
 package com.beowulf.cli;
 
+import com.beowulf.core.db.DbMigrations;
 import com.beowulf.core.factory.ArchiverFactory;
+import com.beowulf.core.visitor.ArchiveLogEntry;
+import com.beowulf.core.visitor.ArchiveLogQueryService;
+import com.beowulf.core.visitor.ArchivePersistenceService;
+import com.beowulf.core.visitor.LoggingArchiver;
+import com.beowulf.core.visitor.PersistArchiveVisitor;
 import com.beowulf.core.strategy.Archiver;
+import com.beowulf.core.user.AppUser;
+import com.beowulf.core.user.LocalUserIdentityProvider;
 
-import java.nio.file.*;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 public class BeowulfCLI {
 
     private static final ArchiverFactory factory = new ArchiverFactory();
 
+    private static LocalUserIdentityProvider identityProvider;
+    private static ArchivePersistenceService persistenceService;
+    private static PersistArchiveVisitor persistVisitor;
+    private static ArchiveLogQueryService logQueryService;
+
     public static void main(String[] args) {
+
+        DbMigrations.migrate();
+
+        identityProvider = new LocalUserIdentityProvider();
+        persistenceService = new ArchivePersistenceService();
+        persistVisitor = new PersistArchiveVisitor(persistenceService);
+        logQueryService = new ArchiveLogQueryService();
 
         if (args.length < 1) {
             printUsage();
@@ -24,6 +47,7 @@ public class BeowulfCLI {
 
                 case "compress" -> handleCompress(args);
                 case "decompress" -> handleDecompress(args);
+                case "logs" -> handleLogs(args);
                 case "help" -> printUsage();
 
                 default -> {
@@ -48,7 +72,11 @@ public class BeowulfCLI {
         Path sourceDir = Paths.get(args[1]);
         Path targetArchive = Paths.get(args[2]);
 
-        Archiver archiver = factory.getArchiver(targetArchive);
+        Archiver baseArchiver = factory.getArchiver(targetArchive);
+        Archiver archiver = new LoggingArchiver(
+                baseArchiver,
+                identityProvider,
+                persistVisitor);
 
         System.out.println("→ Compressing using " + archiver.getName());
         archiver.compress(sourceDir, targetArchive);
@@ -65,11 +93,63 @@ public class BeowulfCLI {
         Path archive = Paths.get(args[1]);
         Path targetDir = Paths.get(args[2]);
 
-        Archiver archiver = factory.getArchiver(archive);
+        Archiver baseArchiver = factory.getArchiver(archive);
+        Archiver archiver = new LoggingArchiver(
+                baseArchiver,
+                identityProvider,
+                persistVisitor);
 
         System.out.println("→ Decompressing using " + archiver.getName());
         archiver.decompress(archive, targetDir);
         System.out.println("✓ Extracted to: " + targetDir);
+    }
+
+    private static void handleLogs(String[] args) {
+        int limit = 20;
+        if (args.length >= 2) {
+            try {
+                limit = Integer.parseInt(args[1]);
+            } catch (NumberFormatException error) {
+                System.err.println("Invalid limit: " + args[1] + ". Using default: 20");
+            }
+        }
+
+        AppUser user = identityProvider.resolveCurrentUser();
+        List<ArchiveLogEntry> entries = logQueryService.findRecentLogs(user.getId(), limit);
+
+        if (entries.isEmpty()) {
+            System.out.println("No logs for current user: " + user.getUsername()
+                    + " (" + user.getId() + ")");
+            return;
+        }
+
+        System.out.println("Beowulf logs for user: " + user.getUsername()
+                + " (" + user.getId() + ")");
+        System.out.println("Last " + entries.size() + " operations:\n");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+        for (ArchiveLogEntry entry : entries) {
+            String createdAt = entry.getCreatedAt() != null ? entry.getCreatedAt().format(formatter) : "?";
+            System.out.printf(
+                    "[%d] %s | %-9s | %-7s | %6d ms%n",
+                    entry.getId(),
+                    createdAt,
+                    entry.getOperation(),
+                    entry.getStatus(),
+                    entry.getDurationMs());
+            System.out.printf(
+                    "    Archive : %s (%s / %s, %d bytes)%n",
+                    entry.getArchivePath(),
+                    entry.getFormat(),
+                    entry.getCompression(),
+                    entry.getSizeBytes());
+            System.out.printf(
+                    "    Checksum: %s %s%n",
+                    entry.getChecksumType(),
+                    entry.getChecksumValue());
+            System.out.println();
+        }
     }
 
     private static void printUsage() {
@@ -79,11 +159,14 @@ public class BeowulfCLI {
                 Usage:
                   beowulf compress <sourceDir> <targetArchive>
                   beowulf decompress <archiveFile> <targetDir>
+                  beowulf logs [limit]
 
                 Examples:
                   beowulf compress ./source beowulf.zip
                   beowulf compress ./folder data.tar.gz
                   beowulf decompress archive.rar ./output
+                  beowulf logs
+                  beowulf logs 10
 
                 Supported formats:
                   ZIP, TAR.GZ, TGZ, RAR, ACE (extract-only)

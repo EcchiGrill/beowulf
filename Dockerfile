@@ -15,7 +15,7 @@
     
     WORKDIR /app
     
-    COPY --from=builder /home/gradle/project/beowulf-cli/build/install/beowulf-cli ./beowulf-cli
+    COPY --from=builder /home/gradle/project/beowulf-cli/build/install/beowulf ./beowulf
     
     # Per-user Beowulf config (~/.beowulf)
     ENV HOME=/root

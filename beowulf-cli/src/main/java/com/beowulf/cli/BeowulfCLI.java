@@ -130,7 +130,22 @@ public class BeowulfCLI {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         for (ArchiveLogEntry entry : entries) {
-            String createdAt = entry.getCreatedAt() != null ? entry.getCreatedAt().format(formatter) : "?";
+            String createdAt = entry.getCreatedAt() != null
+                    ? entry.getCreatedAt().format(formatter)
+                    : "?";
+
+            String pathToShow;
+            if ("DECOMPRESS".equalsIgnoreCase(entry.getOperation())) {
+                String targetPath = entry.getTargetPath();
+                if (targetPath != null && !targetPath.isBlank()) {
+                    pathToShow = targetPath;
+                } else {
+                    pathToShow = entry.getArchivePath();
+                }
+            } else {
+                pathToShow = entry.getArchivePath();
+            }
+
             System.out.printf(
                     "[%d] %s | %-9s | %-7s | %6d ms%n",
                     entry.getId(),
@@ -138,9 +153,12 @@ public class BeowulfCLI {
                     entry.getOperation(),
                     entry.getStatus(),
                     entry.getDurationMs());
+
             System.out.printf(
-                    "    Archive : %s (%s / %s, %d bytes)%n",
-                    entry.getArchivePath(),
+                    "    Path   : %s%n",
+                    pathToShow);
+            System.out.printf(
+                    "    Format : %s / %s, %d bytes%n",
                     entry.getFormat(),
                     entry.getCompression(),
                     entry.getSizeBytes());

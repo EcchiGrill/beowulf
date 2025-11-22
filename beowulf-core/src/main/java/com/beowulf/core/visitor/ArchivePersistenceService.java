@@ -15,6 +15,10 @@ public class ArchivePersistenceService {
         this.dataSource = DataSourceFactory.getDataSource();
     }
 
+    public ArchivePersistenceService(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
     public void persistOperation(ArchiveOperationContext ctx) {
         Connection connection = null;
         try {
@@ -45,7 +49,8 @@ public class ArchivePersistenceService {
                     user.getId(), archiveId,
                     ctx.getOperation(),
                     ctx.getStatus(),
-                    ctx.getDurationMs());
+                    ctx.getDurationMs(),
+                    ctx.getTargetPath());
 
             connection.commit();
         } catch (SQLException error) {
@@ -119,11 +124,12 @@ public class ArchivePersistenceService {
             UUID archiveId,
             String operation,
             String status,
-            long durationMs) throws SQLException {
+            long durationMs,
+            String targetPath) throws SQLException {
         String sql = """
                 INSERT INTO archive_log
-                (user_id, archive_id, operation, status, duration_ms)
-                VALUES (?, ?, ?, ?, ?)
+                (user_id, archive_id, operation, status, duration_ms, target_path)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """;
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -132,6 +138,7 @@ public class ArchivePersistenceService {
             ps.setString(3, operation);
             ps.setString(4, status);
             ps.setLong(5, durationMs);
+            ps.setString(6, targetPath);
             ps.executeUpdate();
         }
     }

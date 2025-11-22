@@ -20,6 +20,8 @@ public class ArchiveLogEntry {
     private String checksumType; // CRC32 / SHA256
     private String checksumValue;
 
+    private String targetPath;
+
     public long getId() {
         return id;
     }
@@ -106,5 +108,13 @@ public class ArchiveLogEntry {
 
     public void setChecksumValue(String checksumValue) {
         this.checksumValue = checksumValue;
+    }
+
+    public String getTargetPath() {
+        return targetPath;
+    }
+
+    public void setTargetPath(String targetPath) {
+        this.targetPath = targetPath;
     }
 }

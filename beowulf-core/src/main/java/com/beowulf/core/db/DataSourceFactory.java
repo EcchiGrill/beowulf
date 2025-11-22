@@ -16,10 +16,23 @@ public final class DataSourceFactory {
         if (dataSource == null) {
             HikariConfig config = new HikariConfig();
 
-            config.setJdbcUrl("jdbc:postgresql://postgres:5432/beowulf_db");
+            String url = System.getenv("BEOWULF_DB_URL");
+            if (url == null || url.isBlank()) {
+                url = "jdbc:postgresql://localhost:5432/beowulf_db";
+            }
+            config.setJdbcUrl(url);
 
-            config.setUsername("beowulf");
-            config.setPassword("beowulf");
+            String user = System.getenv("BEOWULF_DB_USER");
+            if (user == null || user.isBlank()) {
+                user = "beowulf";
+            }
+            config.setUsername(user);
+
+            String pass = System.getenv("BEOWULF_DB_PASS");
+            if (pass == null || pass.isBlank()) {
+                pass = "beowulf";
+            }
+            config.setPassword(pass);
 
             config.setMaximumPoolSize(10);
             config.setMinimumIdle(1);

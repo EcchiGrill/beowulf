@@ -22,6 +22,7 @@ public class ArchiveOperationContext implements LogVisitable {
     private String operationPath; // path involved (e.g. source or target)
     private String status; // SUCCESS / FAILED
     private long durationMs;
+    private String targetPath;
 
     public AppUser getUser() {
         return user;
@@ -61,6 +62,14 @@ public class ArchiveOperationContext implements LogVisitable {
 
     public void setArchivePath(String archivePath) {
         this.archivePath = archivePath;
+    }
+
+    public String getTargetPath() {
+        return targetPath;
+    }
+
+    public void setTargetPath(String targetPath) {
+        this.targetPath = targetPath;
     }
 
     public long getSizeBytes() {

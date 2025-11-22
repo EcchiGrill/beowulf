@@ -60,6 +60,7 @@ public class LoggingArchiver implements Archiver {
 
         ctx.setOperation("COMPRESS");
         ctx.setOperationPath(sourceDir.toString());
+        ctx.setTargetPath(targetArchive.toString());
         ctx.setStatus("SUCCESS");
         ctx.setDurationMs(duration);
 
@@ -94,13 +95,13 @@ public class LoggingArchiver implements Archiver {
             ctx.setFormat(detectFormat(archive));
             ctx.setCompression(detectCompression(archive));
             ctx.setArchivePath(archive.toString());
+            ctx.setTargetPath(targetDir.toString());
             ctx.setSizeBytes(sizeBytes);
 
             ctx.setChecksumType("SHA256");
             ctx.setChecksumValue(checksumValue);
 
             ctx.setOperation("DECOMPRESS");
-            ctx.setOperationPath(targetDir.toString());
             ctx.setStatus(status);
             ctx.setDurationMs(duration);
 

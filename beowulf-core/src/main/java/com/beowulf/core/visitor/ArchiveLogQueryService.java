@@ -17,6 +17,10 @@ public class ArchiveLogQueryService {
         this.dataSource = DataSourceFactory.getDataSource();
     }
 
+    public ArchiveLogQueryService(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
     public List<ArchiveLogEntry> findRecentLogs(UUID userId, int limit) {
         String sql = """
                 SELECT
@@ -25,6 +29,7 @@ public class ArchiveLogQueryService {
                     l.operation,
                     l.status,
                     l.duration_ms,
+                    l.target_path                     AS target_path,
                     a.path                            AS archive_path,
                     a.format,
                     a.compression,
@@ -57,9 +62,8 @@ public class ArchiveLogQueryService {
                     entry.setOperation(resultSet.getString("operation"));
                     entry.setStatus(resultSet.getString("status"));
                     entry.setDurationMs(resultSet.getLong("duration_ms"));
-
+                    entry.setTargetPath(resultSet.getString("target_path"));
                     entry.setArchivePath(resultSet.getString("archive_path"));
-
                     entry.setFormat(resultSet.getString("format"));
                     entry.setCompression(resultSet.getString("compression"));
                     entry.setSizeBytes(resultSet.getLong("size_bytes"));

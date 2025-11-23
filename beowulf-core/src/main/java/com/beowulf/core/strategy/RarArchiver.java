@@ -1,6 +1,7 @@
 package com.beowulf.core.strategy;
 
 import com.beowulf.core.adapter.RarAdapter;
+import com.beowulf.core.interfaces.Archiver;
 
 import java.io.IOException;
 import java.nio.file.Path;

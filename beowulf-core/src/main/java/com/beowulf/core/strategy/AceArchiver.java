@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import com.beowulf.core.adapter.AceAdapter;
+import com.beowulf.core.interfaces.Archiver;
 
 public class AceArchiver implements Archiver {
     private final AceAdapter adapter = new AceAdapter();

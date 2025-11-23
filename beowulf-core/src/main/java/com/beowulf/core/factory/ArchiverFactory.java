@@ -1,5 +1,6 @@
 package com.beowulf.core.factory;
 
+import com.beowulf.core.interfaces.Archiver;
 import com.beowulf.core.strategy.*;
 
 import java.nio.file.Path;

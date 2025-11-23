@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS archive_log (
     id          BIGSERIAL PRIMARY KEY,
     user_id     UUID      NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
     archive_id  UUID      NOT NULL REFERENCES archive(id) ON DELETE CASCADE,
-    operation   VARCHAR(20) NOT NULL, -- COMPRESS / DECOMPRESS
+    operation   VARCHAR(20) NOT NULL, -- COMPRESS / DECOMPRESS / UPDATE
     status      VARCHAR(20) NOT NULL, -- SUCCESS / FAILED
     duration_ms BIGINT      NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()

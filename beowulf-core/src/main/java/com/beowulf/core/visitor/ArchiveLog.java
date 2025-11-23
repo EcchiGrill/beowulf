@@ -2,25 +2,23 @@ package com.beowulf.core.visitor;
 
 import java.time.OffsetDateTime;
 
-public class ArchiveLogEntry {
+public class ArchiveLog {
 
     private long id;
     private OffsetDateTime createdAt;
+    private String operation;
+    private String status;
 
-    private String operation; // COMPRESS / DECOMPRESS
-    private String status; // SUCCESS / FAILED
+    private String archivePath;
+    private String targetPath;
+
+    private String format;
+    private String compression;
+    private long sizeBytes;
     private long durationMs;
 
-    private String archivePath; // archive.path
-
-    private String format; // ZIP / TAR / ...
-    private String compression; // GZIP / BZIP2 / ...
-    private long sizeBytes;
-
-    private String checksumType; // CRC32 / SHA256
+    private String checksumType;
     private String checksumValue;
-
-    private String targetPath;
 
     public long getId() {
         return id;
@@ -54,20 +52,20 @@ public class ArchiveLogEntry {
         this.status = status;
     }
 
-    public long getDurationMs() {
-        return durationMs;
-    }
-
-    public void setDurationMs(long durationMs) {
-        this.durationMs = durationMs;
-    }
-
     public String getArchivePath() {
         return archivePath;
     }
 
     public void setArchivePath(String archivePath) {
         this.archivePath = archivePath;
+    }
+
+    public String getTargetPath() {
+        return targetPath;
+    }
+
+    public void setTargetPath(String targetPath) {
+        this.targetPath = targetPath;
     }
 
     public String getFormat() {
@@ -94,6 +92,14 @@ public class ArchiveLogEntry {
         this.sizeBytes = sizeBytes;
     }
 
+    public long getDurationMs() {
+        return durationMs;
+    }
+
+    public void setDurationMs(long durationMs) {
+        this.durationMs = durationMs;
+    }
+
     public String getChecksumType() {
         return checksumType;
     }
@@ -108,13 +114,5 @@ public class ArchiveLogEntry {
 
     public void setChecksumValue(String checksumValue) {
         this.checksumValue = checksumValue;
-    }
-
-    public String getTargetPath() {
-        return targetPath;
-    }
-
-    public void setTargetPath(String targetPath) {
-        this.targetPath = targetPath;
     }
 }

@@ -1,4 +1,4 @@
-package com.beowulf.core.strategy;
+package com.beowulf.core.interfaces;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -8,7 +8,7 @@ public interface Archiver {
      * Compresses the given source directory or file into a single archive file.
      *
      * @param sourceDir     path to file or directory to compress
-     * @param targetArchive path to resulting archive file (.zip, .tar, etc.)
+     * @param targetArchive path to resulting archive file
      */
     void compress(Path sourceDir, Path targetArchive) throws IOException;
 

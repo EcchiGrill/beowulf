@@ -10,7 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.Properties;
 import java.util.UUID;
 
-public class LocalUserIdentityProvider {
+public class AppUserService {
 
     private static final String CONFIG_DIR = System.getProperty("user.home") + File.separator + ".beowulf";
     private static final String CONFIG_FILE = CONFIG_DIR + File.separator + "config.properties";
@@ -18,12 +18,12 @@ public class LocalUserIdentityProvider {
 
     private final DataSource dataSource;
 
-    public LocalUserIdentityProvider() {
+    public AppUserService() {
         this.dataSource = DataSourceFactory.getDataSource();
     }
 
     public AppUser resolveCurrentUser() {
-        UUID userId = loadOrCreateLocalUserId();
+        UUID userId = loadOrCreateUserId();
         AppUser user = findUserById(userId);
         if (user != null) {
             return user;
@@ -34,14 +34,14 @@ public class LocalUserIdentityProvider {
         return insertUser(newUser);
     }
 
-    private UUID loadOrCreateLocalUserId() {
+    private UUID loadOrCreateUserId() {
         try {
             Properties props = new Properties();
             Path path = Paths.get(CONFIG_FILE);
 
             if (Files.exists(path)) {
-                try (InputStream in = Files.newInputStream(path)) {
-                    props.load(in);
+                try (InputStream inputStream = Files.newInputStream(path)) {
+                    props.load(inputStream);
                 }
                 String idStr = props.getProperty(KEY_USER_ID);
                 if (idStr != null && !idStr.isBlank()) {
@@ -52,8 +52,8 @@ public class LocalUserIdentityProvider {
             Files.createDirectories(Paths.get(CONFIG_DIR));
             UUID newId = UUID.randomUUID();
             props.setProperty(KEY_USER_ID, newId.toString());
-            try (OutputStream out = Files.newOutputStream(path)) {
-                props.store(out, "Beowulf local user config");
+            try (OutputStream outputStream = Files.newOutputStream(path)) {
+                props.store(outputStream, "Beowulf local user config");
             }
             return newId;
         } catch (IOException error) {

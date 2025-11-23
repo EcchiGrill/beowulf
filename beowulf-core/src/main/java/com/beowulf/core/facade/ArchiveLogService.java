@@ -1,6 +1,7 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.facade;
 
 import com.beowulf.core.db.DataSourceFactory;
+import com.beowulf.core.visitor.ArchiveLog;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -9,33 +10,37 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ArchiveLogQueryService {
+public class ArchiveLogService {
 
     private final DataSource dataSource;
 
-    public ArchiveLogQueryService() {
+    public ArchiveLogService() {
         this.dataSource = DataSourceFactory.getDataSource();
     }
 
-    public ArchiveLogQueryService(DataSource dataSource) {
-        this.dataSource = dataSource;
-    }
+    /**
+     * Find the most recent logs for a given user.
+     *
+     * @param userId the ID of the user
+     * @param limit  the maximum number of logs to return
+     * @return a list of ArchiveLog objects
+     */
 
-    public List<ArchiveLogEntry> findRecentLogs(UUID userId, int limit) {
+    public List<ArchiveLog> findRecentLogs(UUID userId, int limit) {
         String sql = """
                 SELECT
-                    l.id                              AS log_id,
-                    l.created_at                      AS log_created_at,
+                    l.id             AS log_id,
+                    l.created_at     AS log_created_at,
                     l.operation,
                     l.status,
                     l.duration_ms,
-                    l.target_path                     AS target_path,
-                    a.path                            AS archive_path,
+                    l.target_path    AS target_path,
+                    a.path           AS archive_path,
                     a.format,
                     a.compression,
                     a.size_bytes,
-                    c.type                            AS checksum_type,
-                    c.value                           AS checksum_value
+                    c.type           AS checksum_type,
+                    c.value          AS checksum_value
                 FROM archive_log l
                 JOIN archive a
                   ON l.archive_id = a.id
@@ -46,7 +51,7 @@ public class ArchiveLogQueryService {
                 LIMIT ?
                 """;
 
-        List<ArchiveLogEntry> result = new ArrayList<>();
+        List<ArchiveLog> result = new ArrayList<>();
 
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -56,14 +61,16 @@ public class ArchiveLogQueryService {
 
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 while (resultSet.next()) {
-                    ArchiveLogEntry entry = new ArchiveLogEntry();
+                    ArchiveLog entry = new ArchiveLog();
                     entry.setId(resultSet.getLong("log_id"));
                     entry.setCreatedAt(resultSet.getObject("log_created_at", OffsetDateTime.class));
                     entry.setOperation(resultSet.getString("operation"));
                     entry.setStatus(resultSet.getString("status"));
                     entry.setDurationMs(resultSet.getLong("duration_ms"));
-                    entry.setTargetPath(resultSet.getString("target_path"));
+
                     entry.setArchivePath(resultSet.getString("archive_path"));
+                    entry.setTargetPath(resultSet.getString("target_path"));
+
                     entry.setFormat(resultSet.getString("format"));
                     entry.setCompression(resultSet.getString("compression"));
                     entry.setSizeBytes(resultSet.getLong("size_bytes"));
@@ -72,7 +79,6 @@ public class ArchiveLogQueryService {
 
                     result.add(entry);
                 }
-
             }
 
         } catch (SQLException error) {

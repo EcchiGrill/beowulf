@@ -2,15 +2,15 @@ package com.beowulf.gui;
 
 import com.beowulf.core.db.DataSourceFactory;
 import com.beowulf.core.db.DbMigrations;
+import com.beowulf.core.facade.ArchiveLogService;
+import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.factory.ArchiverFactory;
-import com.beowulf.core.strategy.Archiver;
+import com.beowulf.core.interfaces.Archiver;
 import com.beowulf.core.user.AppUser;
-import com.beowulf.core.user.LocalUserIdentityProvider;
-import com.beowulf.core.visitor.ArchiveLogEntry;
-import com.beowulf.core.visitor.ArchiveLogQueryService;
-import com.beowulf.core.visitor.ArchivePersistenceService;
-import com.beowulf.core.visitor.LoggingArchiver;
-import com.beowulf.core.visitor.PersistArchiveVisitor;
+import com.beowulf.core.user.AppUserService;
+import com.beowulf.core.visitor.ArchiveLog;
+import com.beowulf.core.visitor.ArchiverLogger;
+import com.beowulf.core.visitor.ArchiveVisitor;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -41,10 +41,10 @@ import java.util.Locale;
 
 public class BeowulfGUI extends Application {
 
-    private LocalUserIdentityProvider identityProvider;
+    private AppUserService identityProvider;
     private ArchivePersistenceService persistenceService;
-    private ArchiveLogQueryService logQueryService;
-    private PersistArchiveVisitor persistVisitor;
+    private ArchiveLogService logQueryService;
+    private ArchiveVisitor persistVisitor;
     private ArchiverFactory archiverFactory;
 
     private Stage primaryStage;
@@ -91,10 +91,10 @@ public class BeowulfGUI extends Application {
 
     private void initCore() {
         DbMigrations.migrate();
-        this.identityProvider = new LocalUserIdentityProvider();
+        this.identityProvider = new AppUserService();
         this.persistenceService = new ArchivePersistenceService();
-        this.logQueryService = new ArchiveLogQueryService();
-        this.persistVisitor = new PersistArchiveVisitor(persistenceService);
+        this.logQueryService = new ArchiveLogService();
+        this.persistVisitor = new ArchiveVisitor(persistenceService);
         this.archiverFactory = new ArchiverFactory();
     }
 
@@ -655,13 +655,13 @@ public class BeowulfGUI extends Application {
 
     private Archiver createLoggingArchiver(Path archivePathOrTarget) {
         Archiver base = archiverFactory.getArchiver(archivePathOrTarget);
-        return new LoggingArchiver(base, identityProvider, persistVisitor);
+        return new ArchiverLogger(base, identityProvider, persistVisitor);
     }
 
     private void reloadLogs() {
-        Task<List<ArchiveLogEntry>> task = new Task<>() {
+        Task<List<ArchiveLog>> task = new Task<>() {
             @Override
-            protected List<ArchiveLogEntry> call() {
+            protected List<ArchiveLog> call() {
                 AppUser user = identityProvider.resolveCurrentUser();
                 return logQueryService.findRecentLogs(user.getId(), 200);
             }
@@ -670,7 +670,7 @@ public class BeowulfGUI extends Application {
             protected void succeeded() {
                 logRows.clear();
 
-                for (ArchiveLogEntry r : getValue()) {
+                for (ArchiveLog r : getValue()) {
                     OffsetDateTime raw = r.getCreatedAt();
                     String shortStr = "";
                     if (raw != null) {

@@ -1,11 +1,13 @@
 package com.beowulf.core.facade;
 
 import com.beowulf.core.db.DataSourceFactory;
+import com.beowulf.core.model.ArchiveOperation;
+import com.beowulf.core.model.ArchivePart;
 import com.beowulf.core.user.AppUser;
-import com.beowulf.core.visitor.ArchiveOperation;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.util.List;
 import java.util.UUID;
 
 public class ArchivePersistenceService {
@@ -35,9 +37,18 @@ public class ArchivePersistenceService {
             if (checksumId == null) {
                 checksumId = UUID.randomUUID();
             }
+
+            String checksumValue = ctx.getChecksumValue();
+            if (checksumValue == null) {
+                checksumValue = "";
+            }
+
             insertChecksum(connection, checksumId,
-                    ctx.getChecksumType(), ctx.getChecksumValue());
+                    ctx.getChecksumType(),
+                    checksumValue);
+
             ctx.setChecksumId(checksumId);
+            ctx.setChecksumValue(checksumValue);
 
             UUID archiveId = ctx.getArchiveId();
             if (archiveId == null) {
@@ -69,6 +80,12 @@ public class ArchivePersistenceService {
                     ctx.getStatus(),
                     ctx.getTargetPath(),
                     ctx.getDurationMs());
+
+            if (ctx.getParts() != null && !ctx.getParts().isEmpty()) {
+                saveArchiveParts(archiveId, ctx.getParts());
+            }
+
+            connection.commit();
 
             connection.commit();
         } catch (SQLException error) {
@@ -114,6 +131,14 @@ public class ArchivePersistenceService {
             UUID id,
             String type,
             String value) throws SQLException {
+
+        if (type == null || type.isBlank()) {
+            type = "UNKNOWN";
+        }
+        if (value == null || value.isBlank()) {
+            value = "N/A";
+        }
+
         String sql = """
                 INSERT INTO checksum (id, type, value)
                 VALUES (?, ?, ?)
@@ -242,6 +267,33 @@ public class ArchivePersistenceService {
             preparedStatement.setString(5, targetPath);
             preparedStatement.setLong(6, durationMs);
             preparedStatement.executeUpdate();
+        }
+    }
+
+    public void saveArchiveParts(UUID archiveId, List<ArchivePart> parts) {
+        if (parts == null || parts.isEmpty()) {
+            return;
+        }
+
+        String sql = """
+                INSERT INTO archive_part (archive_id, part_index, path, size_bytes)
+                VALUES (?, ?, ?, ?)
+                """;
+
+        try (Connection conn = dataSource.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            for (ArchivePart part : parts) {
+                ps.setObject(1, archiveId);
+                ps.setInt(2, part.getPartIndex());
+                ps.setString(3, part.getPath());
+                ps.setLong(4, part.getSizeBytes());
+                ps.addBatch();
+            }
+
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save archive parts", e);
         }
     }
 

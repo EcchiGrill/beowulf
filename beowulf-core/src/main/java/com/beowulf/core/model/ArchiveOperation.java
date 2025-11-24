@@ -1,6 +1,9 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.model;
 
 import com.beowulf.core.user.AppUser;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import java.util.UUID;
 
@@ -9,11 +12,8 @@ public class ArchiveOperation {
     private AppUser user;
 
     private String operation;
-
     private String status;
-
     private String archivePath;
-
     private String targetPath;
 
     private String format; // ZIP / TAR / RAR / ACE
@@ -25,6 +25,8 @@ public class ArchiveOperation {
 
     private UUID checksumId;
     private UUID archiveId;
+
+    private List<ArchivePart> parts;
 
     public AppUser getUser() {
         return user;
@@ -129,4 +131,23 @@ public class ArchiveOperation {
     public void setArchiveId(UUID archiveId) {
         this.archiveId = archiveId;
     }
+
+    public List<ArchivePart> getParts() {
+        return parts;
+    }
+
+    public void setParts(List<ArchivePart> parts) {
+        this.parts = parts;
+    }
+
+    public void addPart(ArchivePart part) {
+        if (part == null) {
+            return;
+        }
+        if (this.parts == null) {
+            this.parts = new ArrayList<>();
+        }
+        this.parts.add(part);
+    }
+
 }

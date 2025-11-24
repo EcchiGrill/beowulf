@@ -7,11 +7,13 @@ import com.beowulf.core.facade.ArchiveLogService;
 import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.factory.ArchiverFactory;
 import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.model.ArchiveLog;
+import com.beowulf.core.model.ArchiveVisitor;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
-import com.beowulf.core.visitor.ArchiveLog;
 import com.beowulf.core.visitor.ArchiverLogger;
-import com.beowulf.core.visitor.ArchiveVisitor;
+import com.beowulf.core.model.ArchivePart;
+
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -48,6 +50,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
+import java.util.UUID;
 
 public class BeowulfGUI extends Application {
 
@@ -1721,6 +1724,20 @@ public class BeowulfGUI extends Application {
     }
 
     private void showLogDetails(LogRow row) {
+        List<ArchivePart> parts = List.of();
+        RuntimeException partsError = null;
+
+        if (row.getSplitParts() > 1 && row.getArchiveId() != null) {
+            try {
+                parts = logQueryService.findArchiveParts(row.getArchiveId());
+            } catch (RuntimeException ex) {
+                partsError = ex;
+            }
+        }
+
+        final List<ArchivePart> partsForUi = parts;
+        final RuntimeException partsErrorFinal = partsError;
+
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             boolean wasMax = primaryStage != null && primaryStage.isMaximized();
@@ -1802,9 +1819,70 @@ public class BeowulfGUI extends Application {
             r++;
 
             Label sizeLabel = boldLabel("Size:");
-            Label sizeValue = new Label(row.getSizeBytes() + " bytes");
+            String sizeText = row.getSizeBytes() + " bytes";
+            if (row.getSizeBytes() > 0) {
+                sizeText += " (" + humanReadableBytes(row.getSizeBytes()) + ")";
+            }
+            Label sizeValue = new Label(sizeText);
             grid.add(sizeLabel, 0, r);
             grid.add(sizeValue, 1, r);
+            r++;
+
+            Label splitLabel = boldLabel("Split archive:");
+
+            if (row.getSplitParts() <= 1) {
+                Label splitValue = new Label("No (single file)");
+                grid.add(splitLabel, 0, r);
+                grid.add(splitValue, 1, r);
+            } else {
+                VBox splitBox = new VBox(4);
+
+                long partsCount = row.getSplitParts();
+                long totalSize = row.getSplitTotalSize();
+                long approxPerPart = (partsCount > 0 && totalSize > 0) ? totalSize / partsCount : 0;
+
+                StringBuilder headerSb = new StringBuilder();
+                headerSb.append(partsCount).append(" part(s)");
+                if (totalSize > 0) {
+                    headerSb.append(", total ").append(totalSize)
+                            .append(" bytes (").append(humanReadableBytes(totalSize)).append(")");
+                }
+                if (approxPerPart > 0) {
+                    headerSb.append(", ~").append(humanReadableBytes(approxPerPart)).append(" each");
+                }
+
+                Label headerLabel = new Label(headerSb.toString());
+                headerLabel.setStyle("-fx-font-weight: bold;");
+                headerLabel.setWrapText(true);
+                splitBox.getChildren().add(headerLabel);
+
+                if (partsErrorFinal != null) {
+                    Label errorLabel = new Label("Failed to load part list: " + partsErrorFinal.getMessage());
+                    errorLabel.setStyle("-fx-text-fill: #d93025;");
+                    errorLabel.setWrapText(true);
+                    splitBox.getChildren().add(errorLabel);
+                } else if (partsForUi != null && !partsForUi.isEmpty()) {
+                    for (ArchivePart p : partsForUi) {
+                        String line = String.format(
+                                Locale.ENGLISH,
+                                "Part %d: %s\n  %d bytes (%s)",
+                                p.getPartIndex(),
+                                p.getPath(),
+                                p.getSizeBytes(),
+                                humanReadableBytes(p.getSizeBytes()));
+                        Label partLabel = new Label(line);
+                        partLabel.setWrapText(true);
+                        splitBox.getChildren().add(partLabel);
+                    }
+                } else {
+                    Label emptyLabel = new Label("No detailed part records found in database.");
+                    emptyLabel.setWrapText(true);
+                    splitBox.getChildren().add(emptyLabel);
+                }
+
+                grid.add(splitLabel, 0, r);
+                grid.add(splitBox, 1, r);
+            }
 
             pane.setContent(grid);
             alert.showAndWait();
@@ -1855,6 +1933,18 @@ public class BeowulfGUI extends Application {
                         pathForUi = (archivePath != null) ? archivePath : "";
                     }
 
+                    long splitParts = 0;
+                    if (r.getSplitPartsCount() != null && r.getSplitPartsCount() > 0) {
+                        splitParts = r.getSplitPartsCount();
+                    }
+
+                    long splitTotalSize = 0L;
+                    if (r.getSplitTotalSize() != null && r.getSplitTotalSize() > 0) {
+                        splitTotalSize = r.getSplitTotalSize();
+                    }
+
+                    String splitFirstPath = r.getSplitFirstPath();
+
                     logRows.add(new LogRow(
                             raw,
                             shortStr,
@@ -1864,13 +1954,20 @@ public class BeowulfGUI extends Application {
                             r.getFormat(),
                             r.getCompression(),
                             r.getSizeBytes(),
-                            r.getDurationMs()));
+                            r.getDurationMs(),
+                            splitParts,
+                            splitTotalSize,
+                            splitFirstPath,
+                            r.getArchiveId()));
                 }
             }
 
             @Override
             protected void failed() {
                 Throwable ex = getException();
+                if (ex != null) {
+                    ex.printStackTrace();
+                }
                 showError("Failed to load logs",
                         ex != null ? ex.getMessage() : "Unknown error");
             }
@@ -1941,6 +2038,21 @@ public class BeowulfGUI extends Application {
                 primaryStage.setMaximized(wasMax);
             }
         });
+    }
+
+    private String humanReadableBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        double value = bytes;
+        String[] units = { "KB", "MB", "GB", "TB" };
+        int unit = 0;
+        value = value / 1024.0;
+        while (value >= 1024.0 && unit < units.length - 1) {
+            value = value / 1024.0;
+            unit++;
+        }
+        return String.format(Locale.ENGLISH, "%.1f %s", value, units[unit]);
     }
 
     private void openInFileManager(String pathString) {
@@ -2061,6 +2173,12 @@ public class BeowulfGUI extends Application {
         private final SimpleLongProperty sizeBytes;
         private final SimpleLongProperty durationMs;
 
+        private final SimpleLongProperty splitParts;
+        private final SimpleLongProperty splitTotalSize;
+        private final SimpleStringProperty splitFirstPath;
+
+        private final UUID archiveId;
+
         public LogRow(OffsetDateTime createdAtRaw,
                 String createdAtFormatted,
                 String operation,
@@ -2069,7 +2187,11 @@ public class BeowulfGUI extends Application {
                 String format,
                 String compression,
                 long sizeBytes,
-                long durationMs) {
+                long durationMs,
+                long splitParts,
+                long splitTotalSize,
+                String splitFirstPath,
+                UUID archiveId) {
             this.createdAtRaw = createdAtRaw;
             this.createdAt = new SimpleStringProperty(createdAtFormatted);
             this.operation = new SimpleStringProperty(operation);
@@ -2079,6 +2201,13 @@ public class BeowulfGUI extends Application {
             this.compression = new SimpleStringProperty(compression);
             this.sizeBytes = new SimpleLongProperty(sizeBytes);
             this.durationMs = new SimpleLongProperty(durationMs);
+
+            this.splitParts = new SimpleLongProperty(splitParts);
+            this.splitTotalSize = new SimpleLongProperty(splitTotalSize);
+            this.splitFirstPath = new SimpleStringProperty(
+                    splitFirstPath != null ? splitFirstPath : "");
+
+            this.archiveId = archiveId;
         }
 
         public OffsetDateTime getCreatedAtRaw() {
@@ -2116,6 +2245,23 @@ public class BeowulfGUI extends Application {
         public long getDurationMs() {
             return durationMs.get();
         }
+
+        public long getSplitParts() {
+            return splitParts.get();
+        }
+
+        public long getSplitTotalSize() {
+            return splitTotalSize.get();
+        }
+
+        public String getSplitFirstPath() {
+            return splitFirstPath.get();
+        }
+
+        public UUID getArchiveId() {
+            return archiveId;
+        }
+
     }
 
     private static class FileNode {

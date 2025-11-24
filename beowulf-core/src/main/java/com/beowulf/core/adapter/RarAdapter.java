@@ -32,25 +32,21 @@ public class RarAdapter {
                           • Windows:        Install WinRAR (includes rar.exe)
                         """));
 
-        // Щоб уникнути дублювання елементів, створюємо архів "з нуля"
         Files.deleteIfExists(targetArchive);
 
         List<String> cmd = new ArrayList<>();
         cmd.add(rar);
         cmd.add("a");
         cmd.add("-ep1");
-        cmd.add("-r"); // рекурсивно додавати підкаталоги
+        cmd.add("-r");
         cmd.add(targetArchive.toAbsolutePath().toString());
 
         String dirName = sourceDir.getFileName() != null ? sourceDir.getFileName().toString() : "";
 
         if (Files.isDirectory(sourceDir) && dirName.startsWith("beowulf-edit-")) {
-            // Режим редагування архіву: пакуємо вміст робочої теки,
-            // але сама beowulf-edit-* не потрапляє в імена всередині архіву.
-            cmd.add("."); // весь вміст поточної директорії
+            cmd.add(".");
             runProcess(cmd, sourceDir);
         } else {
-            // Звичайна компресія: пакуємо вказаний файл/теку
             cmd.add(sourceDir.toAbsolutePath().toString());
             runProcess(cmd, null);
         }

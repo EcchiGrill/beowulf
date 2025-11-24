@@ -5,9 +5,9 @@ import com.beowulf.core.facade.ArchiveLogService;
 import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.factory.ArchiverFactory;
 import com.beowulf.core.interfaces.Archiver;
-import com.beowulf.core.visitor.ArchiveLog;
+import com.beowulf.core.model.ArchiveLog;
+import com.beowulf.core.model.ArchiveVisitor;
 import com.beowulf.core.visitor.ArchiverLogger;
-import com.beowulf.core.visitor.ArchiveVisitor;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 
@@ -164,8 +164,8 @@ public class BeowulfCLI {
                     entry.getSizeBytes());
             System.out.printf(
                     "    Checksum: %s %s%n",
-                    entry.getChecksumType(),
-                    entry.getChecksumValue());
+                    entry.getSplitPartsCount(),
+                    entry.getSplitTotalSize());
             System.out.println();
         }
     }

@@ -2,6 +2,8 @@ package com.beowulf.core.visitor;
 
 import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.model.ArchiveOperation;
+import com.beowulf.core.model.ArchiveVisitor;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 import com.beowulf.core.utils.ArchiveMetadataUtil;
@@ -16,7 +18,7 @@ public class ArchiverLogger implements Archiver {
     private final Archiver delegate;
     private final AppUserService identityProvider;
     private final ArchiveVisitor visitor;
-    private final String operationOverride; // <--- нове поле
+    private final String operationOverride;
 
     public ArchiverLogger(Archiver delegate,
             AppUserService identityProvider,
@@ -30,7 +32,6 @@ public class ArchiverLogger implements Archiver {
         this(delegate, identityProvider, new ArchiveVisitor(persistenceService), null);
     }
 
-    // Новий конструктор з override
     public ArchiverLogger(Archiver delegate,
             AppUserService identityProvider,
             ArchiveVisitor visitor,
@@ -50,7 +51,6 @@ public class ArchiverLogger implements Archiver {
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        // якщо передали override – використовуємо його, інакше COMPRESS
         ctx.setOperation(operationOverride != null ? operationOverride : "COMPRESS");
         ctx.setArchivePath(targetArchive.toAbsolutePath().toString());
         ctx.setTargetPath(null);
@@ -85,8 +85,6 @@ public class ArchiverLogger implements Archiver {
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        // для DECOMPRESS override теж можна використати, але нам не потрібно –
-        // залишаємо DECOMPRESS
         ctx.setOperation(operationOverride != null ? operationOverride : "DECOMPRESS");
         ctx.setArchivePath(archive.toAbsolutePath().toString());
         ctx.setTargetPath(targetDir.toAbsolutePath().toString());

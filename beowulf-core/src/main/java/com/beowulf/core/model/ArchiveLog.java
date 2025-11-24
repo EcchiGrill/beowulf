@@ -1,24 +1,27 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.model;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public class ArchiveLog {
 
     private long id;
-    private OffsetDateTime createdAt;
+    private UUID userId;
+    private UUID archiveId;
+
     private String operation;
     private String status;
-
     private String archivePath;
     private String targetPath;
-
     private String format;
     private String compression;
     private long sizeBytes;
     private long durationMs;
+    private OffsetDateTime createdAt;
 
-    private String checksumType;
-    private String checksumValue;
+    private Long splitPartsCount;
+    private Long splitTotalSize;
+    private String splitFirstPath;
 
     public long getId() {
         return id;
@@ -28,12 +31,20 @@ public class ArchiveLog {
         this.id = id;
     }
 
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
+    public UUID getUserId() {
+        return userId;
     }
 
-    public void setCreatedAt(OffsetDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setUserId(UUID userId) {
+        this.userId = userId;
+    }
+
+    public UUID getArchiveId() {
+        return archiveId;
+    }
+
+    public void setArchiveId(UUID archiveId) {
+        this.archiveId = archiveId;
     }
 
     public String getOperation() {
@@ -100,19 +111,35 @@ public class ArchiveLog {
         this.durationMs = durationMs;
     }
 
-    public String getChecksumType() {
-        return checksumType;
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
     }
 
-    public void setChecksumType(String checksumType) {
-        this.checksumType = checksumType;
+    public void setCreatedAt(OffsetDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
-    public String getChecksumValue() {
-        return checksumValue;
+    public Long getSplitPartsCount() {
+        return splitPartsCount;
     }
 
-    public void setChecksumValue(String checksumValue) {
-        this.checksumValue = checksumValue;
+    public void setSplitPartsCount(Long splitPartsCount) {
+        this.splitPartsCount = splitPartsCount;
+    }
+
+    public Long getSplitTotalSize() {
+        return splitTotalSize;
+    }
+
+    public void setSplitTotalSize(Long splitTotalSize) {
+        this.splitTotalSize = splitTotalSize;
+    }
+
+    public String getSplitFirstPath() {
+        return splitFirstPath;
+    }
+
+    public void setSplitFirstPath(String splitFirstPath) {
+        this.splitFirstPath = splitFirstPath;
     }
 }

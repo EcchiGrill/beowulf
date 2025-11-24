@@ -1,4 +1,4 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.model;
 
 import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.interfaces.LogVisitor;

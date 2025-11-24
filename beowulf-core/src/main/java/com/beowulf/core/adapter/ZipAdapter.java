@@ -14,7 +14,7 @@ public class ZipAdapter {
 
     /**
      * Compresses sourceDir into a .zip archive.
-     * 
+     *
      * @param sourceDir     path to file or directory to compress.
      * @param targetArchive path to resulting .zip file.
      */
@@ -27,7 +27,14 @@ public class ZipAdapter {
         }
 
         Path parent = sourceDir.getParent();
-        Path base = parent != null ? parent : sourceDir;
+        Path base;
+
+        String dirName = sourceDir.getFileName() != null ? sourceDir.getFileName().toString() : "";
+        if (dirName.startsWith("beowulf-edit-")) {
+            base = sourceDir;
+        } else {
+            base = parent != null ? parent : sourceDir;
+        }
 
         try (OutputStream outputStream = Files.newOutputStream(targetArchive);
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
@@ -72,7 +79,7 @@ public class ZipAdapter {
 
     /**
      * Extracts a .zip archive.
-     * 
+     *
      * @param archive   path to existing .zip archive.
      * @param targetDir destination directory.
      */

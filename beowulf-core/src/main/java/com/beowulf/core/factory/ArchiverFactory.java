@@ -30,7 +30,7 @@ public class ArchiverFactory {
             return new AceArchiver();
         }
 
-        throw new IllegalArgumentException("Unsupported archive format: " + name);
+        throw new IllegalArgumentException("Unsupported archive format");
     }
 
 }

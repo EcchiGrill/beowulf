@@ -1,5 +1,6 @@
 package com.beowulf.core.visitor;
 
+import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.interfaces.Archiver;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
@@ -15,13 +16,29 @@ public class ArchiverLogger implements Archiver {
     private final Archiver delegate;
     private final AppUserService identityProvider;
     private final ArchiveVisitor visitor;
+    private final String operationOverride; // <--- нове поле
 
     public ArchiverLogger(Archiver delegate,
             AppUserService identityProvider,
             ArchiveVisitor visitor) {
+        this(delegate, identityProvider, visitor, null);
+    }
+
+    public ArchiverLogger(Archiver delegate,
+            AppUserService identityProvider,
+            ArchivePersistenceService persistenceService) {
+        this(delegate, identityProvider, new ArchiveVisitor(persistenceService), null);
+    }
+
+    // Новий конструктор з override
+    public ArchiverLogger(Archiver delegate,
+            AppUserService identityProvider,
+            ArchiveVisitor visitor,
+            String operationOverride) {
         this.delegate = delegate;
         this.identityProvider = identityProvider;
         this.visitor = visitor;
+        this.operationOverride = operationOverride;
     }
 
     @Override
@@ -33,7 +50,8 @@ public class ArchiverLogger implements Archiver {
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        ctx.setOperation("COMPRESS");
+        // якщо передали override – використовуємо його, інакше COMPRESS
+        ctx.setOperation(operationOverride != null ? operationOverride : "COMPRESS");
         ctx.setArchivePath(targetArchive.toAbsolutePath().toString());
         ctx.setTargetPath(null);
         ctx.setFormat(meta.format());
@@ -67,7 +85,9 @@ public class ArchiverLogger implements Archiver {
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        ctx.setOperation("DECOMPRESS");
+        // для DECOMPRESS override теж можна використати, але нам не потрібно –
+        // залишаємо DECOMPRESS
+        ctx.setOperation(operationOverride != null ? operationOverride : "DECOMPRESS");
         ctx.setArchivePath(archive.toAbsolutePath().toString());
         ctx.setTargetPath(targetDir.toAbsolutePath().toString());
         ctx.setFormat(meta.format());

@@ -2,6 +2,7 @@ package com.beowulf.gui;
 
 import com.beowulf.core.db.DataSourceFactory;
 import com.beowulf.core.db.DbMigrations;
+import com.beowulf.core.facade.ArchiveEditService;
 import com.beowulf.core.facade.ArchiveLogService;
 import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.factory.ArchiverFactory;
@@ -22,22 +23,31 @@ import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
+import javafx.scene.Cursor;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.*;
 import javafx.scene.layout.*;
 import javafx.stage.*;
 import javafx.util.Duration;
 
 import java.awt.Desktop;
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.*;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 public class BeowulfGUI extends Application {
 
@@ -46,21 +56,41 @@ public class BeowulfGUI extends Application {
     private ArchiveLogService logQueryService;
     private ArchiveVisitor persistVisitor;
     private ArchiverFactory archiverFactory;
+    private ArchiveEditService editService;
 
     private Stage primaryStage;
 
     private final ObservableList<LogRow> logRows = FXCollections.observableArrayList();
 
     private static final DateTimeFormatter TABLE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss yyyy-MM-dd");
-
     private static final DateTimeFormatter DETAIL_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm dd MMMM yyyy",
             Locale.ENGLISH);
+
+    private TextField editArchiveField;
+    private TreeView<FileNode> editTreeView;
+    private ProgressBar editProgressBar;
+    private Label editStatusLabel;
+
+    private EditSession currentSession;
+
+    private static final DataFormat EDIT_INTERNAL_MOVE = new DataFormat("beowulf/edit-internal-move");
+    private Path dragSourcePath;
+
+    private static final String[] ARCHIVE_EXTENSIONS = {
+            ".zip", ".tar.gz", ".tgz", ".rar", ".7z", ".tar", ".ace"
+    };
+
+    private Image folderClosedIcon;
+    private Image folderOpenIcon;
+    private Image fileIcon;
+    private Image archiveIcon;
 
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
 
         initCore();
+        loadIcons();
 
         TabPane tabPane = new TabPane();
         tabPane.setTabMinWidth(130);
@@ -68,6 +98,7 @@ public class BeowulfGUI extends Application {
         tabPane.getTabs().addAll(
                 buildCompressTab(primaryStage),
                 buildDecompressTab(primaryStage),
+                buildEditTab(primaryStage),
                 buildLogsTab());
 
         BorderPane root = new BorderPane(tabPane);
@@ -75,9 +106,9 @@ public class BeowulfGUI extends Application {
 
         Scene scene = new Scene(root, 1150, 720);
         root.setStyle("""
-                    -fx-background-color: #f2f3f5;
-                    -fx-font-family: "Segoe UI", "Roboto", sans-serif;
-                    -fx-font-size: 16px;
+                -fx-background-color: #f2f3f5;
+                -fx-font-family: "Segoe UI", "Roboto", sans-serif;
+                -fx-font-size: 16px;
                 """);
 
         primaryStage.setTitle("Beowulf Archiver");
@@ -96,6 +127,31 @@ public class BeowulfGUI extends Application {
         this.logQueryService = new ArchiveLogService();
         this.persistVisitor = new ArchiveVisitor(persistenceService);
         this.archiverFactory = new ArchiverFactory();
+        this.editService = new ArchiveEditService(archiverFactory, identityProvider, persistVisitor);
+    }
+
+    private void loadIcons() {
+        folderClosedIcon = loadIcon("/icons/folder-closed.png");
+        folderOpenIcon = loadIcon("/icons/folder-open.png");
+        fileIcon = loadIcon("/icons/file.png");
+        archiveIcon = loadIcon("/icons/archive.png");
+    }
+
+    private Image loadIcon(String path) {
+        try (InputStream is = getClass().getResourceAsStream(path)) {
+            if (is != null) {
+                return new Image(is);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private ImageView createIconView(Image img) {
+        ImageView iv = new ImageView(img);
+        iv.setFitWidth(16);
+        iv.setFitHeight(16);
+        return iv;
     }
 
     private Tab buildCompressTab(Stage stage) {
@@ -166,9 +222,8 @@ public class BeowulfGUI extends Application {
         String initialExt = getExtForFormatLabel(formatCombo.getSelectionModel().getSelectedItem());
         archiveNameField.setPromptText("beowulf" + initialExt);
 
-        formatCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            adjustArchiveNameForFormat(archiveNameField, newVal);
-        });
+        formatCombo.getSelectionModel().selectedItemProperty()
+                .addListener((obs, oldVal, newVal) -> adjustArchiveNameForFormat(archiveNameField, newVal));
 
         ProgressBar progressBar = new ProgressBar();
         progressBar.setVisible(false);
@@ -179,10 +234,10 @@ public class BeowulfGUI extends Application {
         Button compressBtn = new Button("Compress");
         compressBtn.setPrefHeight(36);
         compressBtn.setStyle("""
-                    -fx-padding: 6 22;
-                    -fx-font-size: 15px;
-                    -fx-background-color: #4a4a4a;
-                    -fx-text-fill: #ffffff;
+                -fx-padding: 6 22;
+                -fx-font-size: 15px;
+                -fx-background-color: #4a4a4a;
+                -fx-text-fill: #ffffff;
                 """);
 
         GridPane grid = new GridPane();
@@ -242,9 +297,9 @@ public class BeowulfGUI extends Application {
         VBox card = new VBox(grid);
         card.setPadding(new Insets(16));
         card.setStyle("""
-                    -fx-background-color: #ffffff;
-                    -fx-background-radius: 8;
-                    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 18, 0, 0, 4);
+                -fx-background-color: #ffffff;
+                -fx-background-radius: 8;
+                -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 18, 0, 0, 4);
                 """);
         card.setMaxWidth(Double.MAX_VALUE);
 
@@ -374,10 +429,10 @@ public class BeowulfGUI extends Application {
         Button decompressBtn = new Button("Decompress");
         decompressBtn.setPrefHeight(36);
         decompressBtn.setStyle("""
-                    -fx-padding: 6 22;
-                    -fx-font-size: 15px;
-                    -fx-background-color: #4a4a4a;
-                    -fx-text-fill: #ffffff;
+                -fx-padding: 6 22;
+                -fx-font-size: 15px;
+                -fx-background-color: #4a4a4a;
+                -fx-text-fill: #ffffff;
                 """);
 
         GridPane grid = new GridPane();
@@ -427,9 +482,9 @@ public class BeowulfGUI extends Application {
         VBox card = new VBox(grid);
         card.setPadding(new Insets(16));
         card.setStyle("""
-                    -fx-background-color: #ffffff;
-                    -fx-background-radius: 8;
-                    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 18, 0, 0, 4);
+                -fx-background-color: #ffffff;
+                -fx-background-radius: 8;
+                -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 18, 0, 0, 4);
                 """);
         card.setMaxWidth(Double.MAX_VALUE);
 
@@ -495,6 +550,1113 @@ public class BeowulfGUI extends Application {
         Tab tab = new Tab("Decompress", root);
         tab.setClosable(false);
         return tab;
+    }
+
+    private Tab buildEditTab(Stage stage) {
+        editArchiveField = new TextField();
+        editArchiveField.setPromptText("Select or paste archive to edit...");
+        editArchiveField.setPrefHeight(34);
+
+        Button browseBtn = new Button("Browse…");
+        browseBtn.setPrefHeight(34);
+        browseBtn.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select archive to edit");
+            chooser.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("Archives",
+                            "*.zip", "*.tar.gz", "*.tgz", "*.rar", "*.7z", "*.tar", "*.ace"),
+                    new FileChooser.ExtensionFilter("All files", "*.*"));
+            File file = chooser.showOpenDialog(stage);
+            if (file != null) {
+                editArchiveField.setText(file.toPath().toString());
+                loadRootArchiveForEdit(file.toPath());
+            }
+        });
+
+        editArchiveField.setOnAction(e -> {
+            String text = editArchiveField.getText();
+            if (text != null && !text.isBlank()) {
+                loadRootArchiveForEdit(Paths.get(text.trim()));
+            }
+        });
+
+        HBox archiveRow = new HBox(8, editArchiveField, browseBtn);
+        HBox.setHgrow(editArchiveField, Priority.ALWAYS);
+
+        editTreeView = new TreeView<>();
+        editTreeView.setShowRoot(true);
+        editTreeView.setContextMenu(createEditContextMenuForEmptySpace());
+
+        editTreeView.setCellFactory(tv -> {
+            TreeCell<FileNode> cell = new TreeCell<>() {
+                @Override
+                protected void updateItem(FileNode item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty || item == null) {
+                        setText(null);
+                        setGraphic(null);
+                    } else {
+                        Path p = item.getPath();
+                        String name = item.getName();
+                        setText(name);
+
+                        Node graphic = null;
+                        TreeItem<FileNode> ti = getTreeItem();
+                        boolean isRoot = ti != null && ti.getParent() == null;
+
+                        if (isRoot) {
+                            if (archiveIcon != null) {
+                                graphic = createIconView(archiveIcon);
+                            }
+                        } else if (item.isDirectory()) {
+                            boolean expanded = ti != null && ti.isExpanded();
+                            Image iconImg = null;
+                            if (expanded && folderOpenIcon != null) {
+                                iconImg = folderOpenIcon;
+                            } else if (folderClosedIcon != null) {
+                                iconImg = folderClosedIcon;
+                            }
+                            if (iconImg != null) {
+                                graphic = createIconView(iconImg);
+                            }
+                        } else if (isArchiveFile(p)) {
+                            if (archiveIcon != null) {
+                                graphic = createIconView(archiveIcon);
+                            }
+                        } else {
+                            if (fileIcon != null) {
+                                graphic = createIconView(fileIcon);
+                            }
+                        }
+
+                        setGraphic(graphic);
+                        setStyle("");
+                    }
+                }
+            };
+
+            cell.setOnContextMenuRequested(e -> {
+                if (!cell.isEmpty()) {
+                    editTreeView.getSelectionModel().select(cell.getTreeItem());
+                }
+            });
+
+            cell.emptyProperty().addListener((obs, wasEmpty, isEmpty) -> {
+                if (isEmpty) {
+                    cell.setContextMenu(null);
+                } else {
+                    cell.setContextMenu(createEditContextMenu());
+                }
+            });
+
+            cell.setOnMouseClicked(e -> {
+                if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 2) {
+                    return;
+                }
+                if (cell.isEmpty()) {
+                    return;
+                }
+                FileNode node = cell.getItem();
+                Path path = node.getPath();
+                if (currentSession == null) {
+                    return;
+                }
+
+                if (node.isDirectory() && path.equals(currentSession.workDir)) {
+                    handleEditRename();
+                } else if (node.isDirectory()) {
+                    handleEditRename();
+                } else if (isArchiveFile(path)) {
+                    openNestedArchive(path, node.getName());
+                } else {
+                    openFileWithDesktop(path);
+                }
+            });
+
+            cell.setOnDragDetected(e -> {
+                if (cell.isEmpty() || currentSession == null || !currentSession.canSave) {
+                    return;
+                }
+                FileNode node = cell.getItem();
+                Path path = node.getPath();
+                if (currentSession.workDir != null && path.equals(currentSession.workDir)) {
+                    return;
+                }
+
+                Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
+                ClipboardContent content = new ClipboardContent();
+                content.put(EDIT_INTERNAL_MOVE, path.toString());
+                db.setContent(content);
+
+                dragSourcePath = path;
+                e.consume();
+            });
+
+            cell.setOnDragOver(e -> {
+                if (currentSession == null || !currentSession.canSave) {
+                    return;
+                }
+                Dragboard db = e.getDragboard();
+                if (db.hasContent(EDIT_INTERNAL_MOVE) || db.hasFiles()) {
+                    e.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+                    Scene scene = cell.getScene();
+                    if (scene != null) {
+                        scene.setCursor(Cursor.HAND);
+                    }
+                }
+                e.consume();
+            });
+
+            cell.setOnDragExited(e -> {
+                Scene scene = cell.getScene();
+                if (scene != null) {
+                    scene.setCursor(Cursor.DEFAULT);
+                }
+            });
+
+            cell.setOnDragDropped(e -> {
+                if (currentSession == null || !currentSession.canSave) {
+                    e.setDropCompleted(false);
+                    e.consume();
+                    return;
+                }
+
+                Dragboard db = e.getDragboard();
+                boolean success = false;
+
+                TreeItem<FileNode> targetItem = cell.getTreeItem();
+                Path targetDir = resolveDropTargetDirectory(targetItem);
+
+                try {
+                    if (db.hasContent(EDIT_INTERNAL_MOVE) && dragSourcePath != null) {
+                        if (!dragSourcePath.startsWith(currentSession.workDir)) {
+                            e.setDropCompleted(false);
+                            e.consume();
+                            return;
+                        }
+                        if (!dragSourcePath.equals(targetDir)) {
+                            movePathIntoDirectory(dragSourcePath, targetDir);
+                            success = true;
+                        }
+                    } else if (db.hasFiles()) {
+                        for (File f : db.getFiles()) {
+                            Path src = f.toPath();
+                            if (Files.isDirectory(src)) {
+                                Path dest = targetDir.resolve(src.getFileName().toString());
+                                copyRecursive(src, dest);
+                            } else {
+                                Files.copy(src, targetDir.resolve(src.getFileName().toString()),
+                                        StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        }
+                        success = true;
+                    }
+                } catch (IOException ex) {
+                    showError("Drag-and-drop failed", ex.getMessage());
+                }
+
+                if (success) {
+                    rebuildEditTree();
+                    scheduleRepackAfterEdit("Drag-and-drop edit");
+                }
+
+                e.setDropCompleted(success);
+                e.consume();
+            });
+
+            return cell;
+        });
+
+        editTreeView.setOnDragOver(e -> {
+            if (currentSession == null || !currentSession.canSave || currentSession.workDir == null) {
+                return;
+            }
+            Node node = e.getPickResult().getIntersectedNode();
+            while (node != null && !(node instanceof TreeCell)) {
+                node = node.getParent();
+            }
+            if (node != null) {
+                return;
+            }
+
+            Dragboard db = e.getDragboard();
+            if (db.hasContent(EDIT_INTERNAL_MOVE) || db.hasFiles()) {
+                e.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+                Scene scene = editTreeView.getScene();
+                if (scene != null) {
+                    scene.setCursor(Cursor.HAND);
+                }
+            }
+            e.consume();
+        });
+
+        editTreeView.setOnDragDropped(e -> {
+            if (currentSession == null || !currentSession.canSave || currentSession.workDir == null) {
+                e.setDropCompleted(false);
+                e.consume();
+                return;
+            }
+
+            Node node = e.getPickResult().getIntersectedNode();
+            while (node != null && !(node instanceof TreeCell)) {
+                node = node.getParent();
+            }
+            if (node != null) {
+                return;
+            }
+
+            Dragboard db = e.getDragboard();
+            boolean success = false;
+            Path targetDir = currentSession.workDir;
+
+            try {
+                if (db.hasContent(EDIT_INTERNAL_MOVE) && dragSourcePath != null) {
+                    if (!dragSourcePath.startsWith(targetDir)) {
+                        e.setDropCompleted(false);
+                        e.consume();
+                        return;
+                    }
+                    if (!dragSourcePath.equals(targetDir)) {
+                        movePathIntoDirectory(dragSourcePath, targetDir);
+                        success = true;
+                    }
+                } else if (db.hasFiles()) {
+                    for (File f : db.getFiles()) {
+                        Path src = f.toPath();
+                        if (Files.isDirectory(src)) {
+                            Path dest = targetDir.resolve(src.getFileName().toString());
+                            copyRecursive(src, dest);
+                        } else {
+                            Files.copy(src, targetDir.resolve(src.getFileName().toString()),
+                                    StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    success = true;
+                }
+            } catch (IOException ex) {
+                showError("Drag-and-drop failed", ex.getMessage());
+            }
+
+            if (success) {
+                rebuildEditTree();
+                scheduleRepackAfterEdit("Drag-and-drop edit");
+            }
+
+            e.setDropCompleted(success);
+            e.consume();
+        });
+
+        editTreeView.setOnDragExited(e -> {
+            Scene scene = editTreeView.getScene();
+            if (scene != null) {
+                scene.setCursor(Cursor.DEFAULT);
+            }
+        });
+
+        editTreeView.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.DELETE) {
+                handleEditDelete();
+                event.consume();
+            } else if (event.getCode() == KeyCode.F2) {
+                handleEditRename();
+                event.consume();
+            }
+        });
+
+        Label nameLabel = boldLabel("Name:");
+        Label pathLabel = boldLabel("Path:");
+        Label sizeLabel = boldLabel("Size:");
+        Label modifiedLabel = boldLabel("Modified:");
+
+        Label nameValue = new Label("-");
+        Label pathValue = new Label("-");
+        Label sizeValue = new Label("-");
+        Label modifiedValue = new Label("-");
+
+        nameValue.setWrapText(true);
+        pathValue.setWrapText(true);
+
+        GridPane detailsGrid = new GridPane();
+        detailsGrid.setHgap(10);
+        detailsGrid.setVgap(8);
+        detailsGrid.setPadding(new Insets(10));
+
+        ColumnConstraints dc1 = new ColumnConstraints();
+        dc1.setMinWidth(70);
+        dc1.setPrefWidth(80);
+        ColumnConstraints dc2 = new ColumnConstraints();
+        dc2.setHgrow(Priority.ALWAYS);
+        detailsGrid.getColumnConstraints().addAll(dc1, dc2);
+
+        int dr = 0;
+        detailsGrid.add(nameLabel, 0, dr);
+        detailsGrid.add(nameValue, 1, dr);
+        dr++;
+        detailsGrid.add(pathLabel, 0, dr);
+        detailsGrid.add(pathValue, 1, dr);
+        dr++;
+        detailsGrid.add(sizeLabel, 0, dr);
+        detailsGrid.add(sizeValue, 1, dr);
+        dr++;
+        detailsGrid.add(modifiedLabel, 0, dr);
+        detailsGrid.add(modifiedValue, 1, dr);
+
+        editTreeView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || newVal.getValue() == null || currentSession == null) {
+                nameValue.setText("-");
+                pathValue.setText("-");
+                sizeValue.setText("-");
+                modifiedValue.setText("-");
+            } else {
+                Path p = newVal.getValue().getPath();
+                nameValue.setText(newVal.getValue().getName());
+
+                try {
+                    if (Files.exists(p)) {
+                        Path base = currentSession.workDir;
+                        if (base != null && p.startsWith(base)) {
+                            Path rel = base.relativize(p);
+                            pathValue.setText(rel.toString());
+                        } else {
+                            pathValue.setText(p.toAbsolutePath().toString());
+                        }
+
+                        if (Files.isDirectory(p)) {
+                            try (Stream<Path> s = Files.list(p)) {
+                                long count = s.count();
+                                sizeValue.setText(count + " item(s)");
+                            }
+                        } else {
+                            long size = Files.size(p);
+                            sizeValue.setText(size + " bytes");
+                        }
+                        modifiedValue.setText(
+                                Files.getLastModifiedTime(p).toInstant()
+                                        .atZone(ZoneId.systemDefault())
+                                        .format(TABLE_TIME_FORMAT));
+                    } else {
+                        pathValue.setText(p.toAbsolutePath().toString());
+                        sizeValue.setText("N/A");
+                        modifiedValue.setText("N/A");
+                    }
+                } catch (IOException ex) {
+                    sizeValue.setText("N/A");
+                    modifiedValue.setText("N/A");
+                }
+            }
+        });
+
+        SplitPane centerPane = new SplitPane();
+        centerPane.setDividerPositions(0.45);
+        centerPane.getItems().addAll(editTreeView, detailsGrid);
+
+        editProgressBar = new ProgressBar();
+        editProgressBar.setVisible(false);
+        editProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        editProgressBar.setPrefWidth(260);
+        editProgressBar.setPrefHeight(18);
+
+        editStatusLabel = new Label();
+        editStatusLabel.setStyle("-fx-text-fill: #5f6368;");
+
+        HBox bottomBar = new HBox(12, editProgressBar, editStatusLabel);
+        bottomBar.setAlignment(Pos.CENTER_LEFT);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(14);
+        grid.setPadding(new Insets(18));
+        grid.setMaxWidth(Double.MAX_VALUE);
+
+        ColumnConstraints ec1 = new ColumnConstraints();
+        ec1.setPercentWidth(24);
+        ColumnConstraints ec2 = new ColumnConstraints();
+        ec2.setPercentWidth(76);
+        grid.getColumnConstraints().addAll(ec1, ec2);
+
+        Label title = new Label("Edit archive");
+        title.setStyle("-fx-text-fill: #202124; -fx-font-size: 20px; -fx-font-weight: bold;");
+
+        Label subtitle = new Label("Browse and modify archive contents.");
+        subtitle.setStyle("-fx-text-fill: #5f6368;");
+
+        int row = 0;
+        grid.add(title, 0, row, 2, 1);
+        row++;
+        grid.add(subtitle, 0, row, 2, 1);
+        row++;
+        grid.add(new Separator(), 0, row, 2, 1);
+        row++;
+
+        grid.add(label("Archive:"), 0, row);
+        grid.add(archiveRow, 1, row);
+        row++;
+
+        grid.add(new Separator(), 0, row, 2, 1);
+        row++;
+
+        grid.add(centerPane, 0, row, 2, 1);
+        GridPane.setVgrow(centerPane, Priority.ALWAYS);
+        row++;
+
+        grid.add(new Separator(), 0, row, 2, 1);
+        row++;
+
+        grid.add(bottomBar, 0, row, 2, 1);
+
+        VBox card = new VBox(grid);
+        card.setPadding(new Insets(16));
+        card.setStyle("""
+                -fx-background-color: #ffffff;
+                -fx-background-radius: 8;
+                -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 18, 0, 0, 4);
+                """);
+        card.setMaxWidth(Double.MAX_VALUE);
+
+        StackPane root = new StackPane(card);
+        StackPane.setMargin(card, new Insets(12));
+        root.setPadding(new Insets(4));
+
+        Tab tab = new Tab("Edit", root);
+        tab.setClosable(false);
+        return tab;
+    }
+
+    private boolean isArchiveFile(Path path) {
+        if (path == null)
+            return false;
+        String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        for (String ext : ARCHIVE_EXTENSIONS) {
+            if (name.endsWith(ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ContextMenu createEditContextMenu() {
+        MenuItem newFolder = new MenuItem("New folder…");
+        newFolder.setOnAction(e -> handleEditNewFolder());
+
+        MenuItem addFile = new MenuItem("Add file…");
+        addFile.setOnAction(e -> handleEditAddFile());
+
+        MenuItem rename = new MenuItem("Rename…");
+        rename.setOnAction(e -> handleEditRename());
+
+        MenuItem delete = new MenuItem("Delete");
+        delete.setOnAction(e -> handleEditDelete());
+
+        return new ContextMenu(newFolder, addFile, rename, delete);
+    }
+
+    private ContextMenu createEditContextMenuForEmptySpace() {
+        MenuItem newFolder = new MenuItem("New folder…");
+        newFolder.setOnAction(e -> handleEditNewFolder());
+
+        MenuItem addFile = new MenuItem("Add file…");
+        addFile.setOnAction(e -> handleEditAddFile());
+
+        return new ContextMenu(newFolder, addFile);
+    }
+
+    private void loadRootArchiveForEdit(Path archivePath) {
+        if (archivePath == null) {
+            return;
+        }
+        if (!Files.exists(archivePath)) {
+            showError("Archive not found", "File does not exist:\n" + archivePath);
+            return;
+        }
+
+        closeAllEditSessions();
+
+        String lower = archivePath.toString().toLowerCase(Locale.ROOT);
+        boolean canSave = !lower.endsWith(".ace");
+
+        EditSession root = new EditSession();
+        root.archiveFile = archivePath;
+        root.displayPath = archivePath.toString();
+        root.canSave = canSave;
+        root.parent = null;
+
+        try {
+            root.workDir = Files.createTempDirectory("beowulf-edit-");
+        } catch (IOException e) {
+            showError("Edit failed", "Cannot create temp directory:\n" + e.getMessage());
+            return;
+        }
+
+        currentSession = root;
+        editArchiveField.setText(root.displayPath);
+
+        editProgressBar.setVisible(true);
+        editStatusLabel.setText("");
+        editTreeView.setDisable(true);
+        editArchiveField.setDisable(true);
+
+        long startTime = System.currentTimeMillis();
+
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                Archiver archiver = createLoggingArchiver(archivePath);
+                archiver.decompress(archivePath, root.workDir);
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editStatusLabel.setText("");
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    rebuildEditTree();
+                });
+            }
+
+            @Override
+            protected void failed() {
+                Throwable ex = getException();
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    editStatusLabel.setText("");
+                    showError("Failed to load archive",
+                            ex != null ? ex.getMessage() : "Unknown error");
+                });
+            }
+        };
+
+        new Thread(task, "edit-load-archive").start();
+    }
+
+    private void openNestedArchive(Path nestedArchive, String name) {
+        if (currentSession == null) {
+            return;
+        }
+        if (!Files.exists(nestedArchive)) {
+            showError("Archive not found", "File does not exist:\n" + nestedArchive);
+            return;
+        }
+
+        String lower = nestedArchive.toString().toLowerCase(Locale.ROOT);
+        boolean canSave = !lower.endsWith(".ace");
+
+        EditSession parent = currentSession;
+
+        EditSession nested = new EditSession();
+        nested.archiveFile = nestedArchive;
+        nested.displayPath = parent.displayPath + " » " + name;
+        nested.canSave = canSave;
+        nested.parent = parent;
+
+        try {
+            nested.workDir = Files.createTempDirectory("beowulf-edit-");
+        } catch (IOException e) {
+            showError("Edit failed", "Cannot create temp directory:\n" + e.getMessage());
+            return;
+        }
+
+        currentSession = nested;
+        editArchiveField.setText(nested.displayPath);
+
+        editProgressBar.setVisible(true);
+        editStatusLabel.setText("");
+        editTreeView.setDisable(true);
+        editArchiveField.setDisable(true);
+
+        long startTime = System.currentTimeMillis();
+
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                Archiver archiver = createLoggingArchiver(nestedArchive);
+                archiver.decompress(nestedArchive, nested.workDir);
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editStatusLabel.setText("");
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    rebuildEditTree();
+                });
+            }
+
+            @Override
+            protected void failed() {
+                Throwable ex = getException();
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    editStatusLabel.setText("");
+                    showError("Failed to load nested archive",
+                            ex != null ? ex.getMessage() : "Unknown error");
+                });
+            }
+        };
+
+        new Thread(task, "edit-load-nested").start();
+    }
+
+    private void rebuildEditTree() {
+        if (editTreeView == null || currentSession == null || currentSession.workDir == null) {
+            return;
+        }
+
+        try {
+            Path rootDir = currentSession.workDir;
+            String rootName = currentSession.archiveFile != null
+                    ? currentSession.archiveFile.getFileName().toString()
+                    : rootDir.getFileName().toString();
+
+            FileNode rootNode = new FileNode(rootDir, rootName, true);
+            TreeItem<FileNode> rootItem = new TreeItem<>(rootNode);
+            rootItem.setExpanded(true);
+            populateTreeChildren(rootItem);
+            editTreeView.setRoot(rootItem);
+        } catch (IOException ex) {
+            showError("Failed to build tree", ex.getMessage());
+        }
+    }
+
+    private void populateTreeChildren(TreeItem<FileNode> parent) throws IOException {
+        Path dir = parent.getValue().getPath();
+        if (!Files.isDirectory(dir))
+            return;
+
+        try (Stream<Path> stream = Files.list(dir)) {
+            stream.sorted((p1, p2) -> {
+                try {
+                    boolean d1 = Files.isDirectory(p1);
+                    boolean d2 = Files.isDirectory(p2);
+                    if (d1 != d2) {
+                        return d1 ? -1 : 1;
+                    }
+                } finally {
+                }
+                return p1.getFileName().toString().compareToIgnoreCase(
+                        p2.getFileName().toString());
+            }).forEach(childPath -> {
+                boolean isDir = Files.isDirectory(childPath);
+                FileNode node = new FileNode(
+                        childPath,
+                        childPath.getFileName().toString(),
+                        isDir);
+                TreeItem<FileNode> item = new TreeItem<>(node);
+                parent.getChildren().add(item);
+                if (isDir) {
+                    try {
+                        populateTreeChildren(item);
+                    } catch (IOException ignored) {
+                    }
+                }
+            });
+        }
+    }
+
+    private Path resolveDropTargetDirectory(TreeItem<FileNode> targetItem) {
+        if (currentSession == null || currentSession.workDir == null) {
+            return null;
+        }
+        if (targetItem == null || targetItem.getValue() == null) {
+            return currentSession.workDir;
+        }
+
+        Path p = targetItem.getValue().getPath();
+        if (Files.isDirectory(p)) {
+            return p;
+        }
+        Path parent = p.getParent();
+        return parent != null ? parent : currentSession.workDir;
+    }
+
+    private void movePathIntoDirectory(Path source, Path targetDir) throws IOException {
+        if (!Files.exists(source) || targetDir == null) {
+            return;
+        }
+        if (!Files.isDirectory(targetDir)) {
+            return;
+        }
+        if (targetDir.startsWith(source)) {
+            return;
+        }
+
+        Path dest = targetDir.resolve(source.getFileName().toString());
+        Files.move(source, dest, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private Path resolveTargetDirForSelection() {
+        if (currentSession == null || currentSession.workDir == null)
+            return null;
+
+        TreeItem<FileNode> selected = editTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getValue() == null) {
+            return currentSession.workDir;
+        }
+
+        Path p = selected.getValue().getPath();
+        if (Files.isDirectory(p)) {
+            return p;
+        }
+        Path parent = p.getParent();
+        return parent != null ? parent : currentSession.workDir;
+    }
+
+    private void handleEditNewFolder() {
+        if (currentSession == null || !currentSession.canSave) {
+            showError("Editing not supported",
+                    "This archive format is read-only. You can only view contents.");
+            return;
+        }
+        if (currentSession.workDir == null) {
+            showError("No archive loaded", "Load an archive before editing.");
+            return;
+        }
+
+        Path targetDir = resolveTargetDirForSelection();
+        if (targetDir == null)
+            return;
+
+        TextInputDialog dialog = new TextInputDialog("NewFolder");
+        dialog.setTitle("New folder");
+        dialog.setHeaderText("Create a folder inside archive");
+        dialog.setContentText("Folder name:");
+        if (primaryStage != null) {
+            dialog.initOwner(primaryStage);
+            dialog.initModality(Modality.WINDOW_MODAL);
+        }
+
+        dialog.showAndWait().ifPresent(name -> {
+            String trimmed = name == null ? "" : name.trim();
+            if (trimmed.isEmpty())
+                return;
+
+            Path newDir = targetDir.resolve(trimmed);
+            try {
+                Files.createDirectories(newDir);
+                rebuildEditTree();
+                scheduleRepackAfterEdit("Create folder: " + trimmed);
+            } catch (IOException ex) {
+                showError("Failed to create folder", ex.getMessage());
+            }
+        });
+    }
+
+    private void handleEditAddFile() {
+        if (currentSession == null || !currentSession.canSave) {
+            showError("Editing not supported",
+                    "This archive format is read-only. You can only view contents.");
+            return;
+        }
+        if (currentSession.workDir == null) {
+            showError("No archive loaded", "Load an archive before editing.");
+            return;
+        }
+
+        Path targetDir = resolveTargetDirForSelection();
+        if (targetDir == null)
+            return;
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select file(s) to add");
+        List<File> files = chooser.showOpenMultipleDialog(primaryStage);
+        if (files == null || files.isEmpty())
+            return;
+
+        boolean changed = false;
+        for (File f : files) {
+            Path src = f.toPath();
+            try {
+                if (Files.isDirectory(src)) {
+                    Path dest = targetDir.resolve(src.getFileName().toString());
+                    copyRecursive(src, dest);
+                } else {
+                    Files.copy(src, targetDir.resolve(src.getFileName().toString()),
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
+                changed = true;
+            } catch (IOException ex) {
+                showError("Add file failed", ex.getMessage());
+            }
+        }
+
+        if (changed) {
+            rebuildEditTree();
+            scheduleRepackAfterEdit("Add files");
+        }
+    }
+
+    private void handleEditRename() {
+        if (currentSession == null || !currentSession.canSave) {
+            showError("Editing not supported",
+                    "This archive format is read-only. You can only view contents.");
+            return;
+        }
+        if (currentSession.workDir == null) {
+            showError("No archive loaded", "Load an archive before editing.");
+            return;
+        }
+
+        TreeItem<FileNode> selected = editTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getValue() == null) {
+            return;
+        }
+
+        FileNode node = selected.getValue();
+        Path path = node.getPath();
+
+        boolean isRoot = path.equals(currentSession.workDir);
+
+        if (isRoot) {
+            Path archiveFile = currentSession.archiveFile;
+            if (archiveFile == null)
+                return;
+
+            TextInputDialog dialog = new TextInputDialog(archiveFile.getFileName().toString());
+            dialog.setTitle("Rename archive");
+            dialog.setHeaderText("Rename archive file");
+            dialog.setContentText("New name:");
+            if (primaryStage != null) {
+                dialog.initOwner(primaryStage);
+                dialog.initModality(Modality.WINDOW_MODAL);
+            }
+
+            dialog.showAndWait().ifPresent(name -> {
+                String trimmed = name == null ? "" : name.trim();
+                if (trimmed.isEmpty() || trimmed.equals(archiveFile.getFileName().toString()))
+                    return;
+
+                Path target = archiveFile.resolveSibling(trimmed);
+                try {
+                    Files.move(archiveFile, target, StandardCopyOption.REPLACE_EXISTING);
+                    currentSession.archiveFile = target;
+
+                    if (currentSession.parent != null) {
+                        currentSession.displayPath = currentSession.parent.displayPath + " » " + trimmed;
+                    } else {
+                        currentSession.displayPath = target.toString();
+                    }
+                    editArchiveField.setText(currentSession.displayPath);
+                    rebuildEditTree();
+                    scheduleRepackAfterEdit("Rename archive file");
+                } catch (IOException ex) {
+                    showError("Rename failed", ex.getMessage());
+                }
+            });
+
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog(node.getName());
+        dialog.setTitle("Rename");
+        dialog.setHeaderText("Rename file or folder");
+        dialog.setContentText("New name:");
+        if (primaryStage != null) {
+            dialog.initOwner(primaryStage);
+            dialog.initModality(Modality.WINDOW_MODAL);
+        }
+
+        dialog.showAndWait().ifPresent(name -> {
+            String trimmed = name == null ? "" : name.trim();
+            if (trimmed.isEmpty() || trimmed.equals(node.getName()))
+                return;
+
+            Path target = path.resolveSibling(trimmed);
+            try {
+                Files.move(path, target, StandardCopyOption.REPLACE_EXISTING);
+                rebuildEditTree();
+                scheduleRepackAfterEdit("Rename " + node.getName() + " -> " + trimmed);
+            } catch (IOException ex) {
+                showError("Rename failed", ex.getMessage());
+            }
+        });
+    }
+
+    private void handleEditDelete() {
+        if (currentSession == null || !currentSession.canSave) {
+            showError("Editing not supported",
+                    "This archive format is read-only. You can only view contents.");
+            return;
+        }
+        if (currentSession.workDir == null) {
+            showError("No archive loaded", "Load an archive before editing.");
+            return;
+        }
+
+        TreeItem<FileNode> selected = editTreeView.getSelectionModel().getSelectedItem();
+        if (selected == null || selected.getValue() == null) {
+            return;
+        }
+
+        FileNode node = selected.getValue();
+        Path path = node.getPath();
+        if (path.equals(currentSession.workDir)) {
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Delete");
+        confirm.setHeaderText(null);
+        confirm.setContentText("Delete '" + node.getName() + "' from archive?");
+        if (primaryStage != null) {
+            confirm.initOwner(primaryStage);
+            confirm.initModality(Modality.WINDOW_MODAL);
+        }
+
+        confirm.showAndWait().ifPresent(result -> {
+            if (result == ButtonType.OK) {
+                try {
+                    deleteRecursive(path);
+                    rebuildEditTree();
+                    scheduleRepackAfterEdit("Delete " + node.getName());
+                } catch (IOException ex) {
+                    showError("Delete failed", ex.getMessage());
+                }
+            }
+        });
+    }
+
+    private void scheduleRepackAfterEdit(String reason) {
+        if (currentSession == null || !currentSession.canSave) {
+            return;
+        }
+        if (currentSession.workDir == null || currentSession.archiveFile == null) {
+            return;
+        }
+
+        EditSession sessionToSaveFrom = currentSession;
+
+        editProgressBar.setVisible(true);
+        editStatusLabel.setText("");
+        editTreeView.setDisable(true);
+        editArchiveField.setDisable(true);
+
+        long startTime = System.currentTimeMillis();
+
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                EditSession s = sessionToSaveFrom;
+                while (s != null) {
+                    editService.saveArchive(s.workDir, s.archiveFile);
+                    s = s.parent;
+                }
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editStatusLabel.setText("");
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    reloadLogs();
+                });
+            }
+
+            @Override
+            protected void failed() {
+                Throwable ex = getException();
+                runWithMinLoading(startTime, () -> {
+                    editProgressBar.setVisible(false);
+                    editArchiveField.setDisable(false);
+                    editTreeView.setDisable(false);
+                    editStatusLabel.setText("");
+                    showError("Failed to save changes",
+                            ex != null ? ex.getMessage() : "Unknown error");
+                });
+            }
+        };
+
+        new Thread(task, "edit-repack-archive").start();
+    }
+
+    private void closeAllEditSessions() {
+        EditSession s = currentSession;
+        while (s != null) {
+            Path wd = s.workDir;
+            if (wd != null && Files.exists(wd)) {
+                try (Stream<Path> walk = Files.walk(wd)) {
+                    walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException ignored) {
+                        }
+                    });
+                } catch (IOException ignored) {
+                }
+            }
+            s = s.parent;
+        }
+        currentSession = null;
+    }
+
+    private void deleteRecursive(Path path) throws IOException {
+        if (!Files.exists(path))
+            return;
+        if (Files.isDirectory(path)) {
+            try (Stream<Path> walk = Files.walk(path)) {
+                walk.sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                Files.deleteIfExists(p);
+                            } catch (IOException ignored) {
+                            }
+                        });
+            }
+        } else {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    private void copyRecursive(Path src, Path dest) throws IOException {
+        if (Files.isDirectory(src)) {
+            try (Stream<Path> walk = Files.walk(src)) {
+                walk.forEach(p -> {
+                    Path relative = src.relativize(p);
+                    Path target = dest.resolve(relative.toString());
+                    try {
+                        if (Files.isDirectory(p)) {
+                            Files.createDirectories(target);
+                        } else {
+                            Files.copy(p, target, StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    } catch (IOException ignored) {
+                    }
+                });
+            }
+        } else {
+            Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private void openFileWithDesktop(Path path) {
+        if (path == null || !Files.exists(path)) {
+            showError("Open file failed", "File does not exist:\n" + path);
+            return;
+        }
+        if (!Desktop.isDesktopSupported()) {
+            showError("Open file failed", "Desktop operations are not supported on this system.");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                Desktop.getDesktop().open(path.toFile());
+            } catch (Exception e) {
+                showError("Open file failed",
+                        "Cannot open file:\n" + path + "\n\n" + e.getMessage());
+            }
+        }, "open-file-thread").start();
     }
 
     private Tab buildLogsTab() {
@@ -683,7 +1845,6 @@ public class BeowulfGUI extends Application {
                     String targetPath = r.getTargetPath();
 
                     String pathForUi;
-
                     if ("DECOMPRESS".equalsIgnoreCase(op)) {
                         if (targetPath != null && !targetPath.isBlank()) {
                             pathForUi = targetPath;
@@ -881,6 +2042,7 @@ public class BeowulfGUI extends Application {
 
     @Override
     public void stop() {
+        closeAllEditSessions();
         DataSourceFactory.close();
     }
 
@@ -954,5 +2116,37 @@ public class BeowulfGUI extends Application {
         public long getDurationMs() {
             return durationMs.get();
         }
+    }
+
+    private static class FileNode {
+        private final Path path;
+        private final String name;
+        private final boolean directory;
+
+        FileNode(Path path, String name, boolean directory) {
+            this.path = path;
+            this.name = name;
+            this.directory = directory;
+        }
+
+        public Path getPath() {
+            return path;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public boolean isDirectory() {
+            return directory;
+        }
+    }
+
+    private static class EditSession {
+        Path archiveFile;
+        Path workDir;
+        String displayPath;
+        boolean canSave;
+        EditSession parent;
     }
 }

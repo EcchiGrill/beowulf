@@ -9,7 +9,7 @@ public class RarAdapter {
     /**
      * Compresses sourceDir into a .rar archive using external "rar" tool.
      * Requires user to have rar installed on their OS.
-     * 
+     *
      * @param sourceDir     path to file or directory to compress.
      * @param targetArchive path to resulting .rar file.
      */
@@ -32,20 +32,30 @@ public class RarAdapter {
                           • Windows:        Install WinRAR (includes rar.exe)
                         """));
 
+        Files.deleteIfExists(targetArchive);
+
         List<String> cmd = new ArrayList<>();
         cmd.add(rar);
         cmd.add("a");
         cmd.add("-ep1");
+        cmd.add("-r");
         cmd.add(targetArchive.toAbsolutePath().toString());
-        cmd.add(sourceDir.toAbsolutePath().toString());
 
-        runProcess(cmd);
+        String dirName = sourceDir.getFileName() != null ? sourceDir.getFileName().toString() : "";
+
+        if (Files.isDirectory(sourceDir) && dirName.startsWith("beowulf-edit-")) {
+            cmd.add(".");
+            runProcess(cmd, sourceDir);
+        } else {
+            cmd.add(sourceDir.toAbsolutePath().toString());
+            runProcess(cmd, null);
+        }
     }
 
     /**
      * Extracts a .rar archive using "rar x".
      * Requires user to have rar installed on their OS.
-     * 
+     *
      * @param archive   path to existing .rar archive.
      * @param targetDir destination directory.
      */
@@ -77,7 +87,7 @@ public class RarAdapter {
         cmd.add(archive.toAbsolutePath().toString());
         cmd.add(targetDir.toAbsolutePath().toString() + File.separator);
 
-        runProcess(cmd);
+        runProcess(cmd, null);
     }
 
     private Optional<String> findRarBinary() {
@@ -108,9 +118,12 @@ public class RarAdapter {
         return os.contains("win");
     }
 
-    private void runProcess(List<String> command) throws IOException {
+    private void runProcess(List<String> command, Path workingDir) throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.redirectErrorStream(true);
+        if (workingDir != null) {
+            processBuilder.directory(workingDir.toFile());
+        }
 
         Process process = processBuilder.start();
 
@@ -133,5 +146,4 @@ public class RarAdapter {
             throw new IOException("RAR interrupted", error);
         }
     }
-
 }

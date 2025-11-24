@@ -1,5 +1,6 @@
 package com.beowulf.core.factory;
 
+import com.beowulf.core.interfaces.Archiver;
 import com.beowulf.core.strategy.*;
 
 import java.nio.file.Path;
@@ -29,7 +30,7 @@ public class ArchiverFactory {
             return new AceArchiver();
         }
 
-        throw new IllegalArgumentException("Unsupported archive format: " + name);
+        throw new IllegalArgumentException("Unsupported archive format");
     }
 
 }

@@ -1,15 +1,15 @@
 package com.beowulf.cli;
 
 import com.beowulf.core.db.DbMigrations;
+import com.beowulf.core.facade.ArchiveLogService;
+import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.factory.ArchiverFactory;
-import com.beowulf.core.visitor.ArchiveLogEntry;
-import com.beowulf.core.visitor.ArchiveLogQueryService;
-import com.beowulf.core.visitor.ArchivePersistenceService;
-import com.beowulf.core.visitor.LoggingArchiver;
-import com.beowulf.core.visitor.PersistArchiveVisitor;
-import com.beowulf.core.strategy.Archiver;
+import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.model.ArchiveLog;
+import com.beowulf.core.model.ArchiveVisitor;
+import com.beowulf.core.visitor.ArchiverLogger;
 import com.beowulf.core.user.AppUser;
-import com.beowulf.core.user.LocalUserIdentityProvider;
+import com.beowulf.core.user.AppUserService;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -21,19 +21,19 @@ public class BeowulfCLI {
 
     private static final ArchiverFactory factory = new ArchiverFactory();
 
-    private static LocalUserIdentityProvider identityProvider;
+    private static AppUserService identityProvider;
     private static ArchivePersistenceService persistenceService;
-    private static PersistArchiveVisitor persistVisitor;
-    private static ArchiveLogQueryService logQueryService;
+    private static ArchiveVisitor persistVisitor;
+    private static ArchiveLogService logQueryService;
 
     public static void main(String[] args) {
 
         DbMigrations.migrate();
 
-        identityProvider = new LocalUserIdentityProvider();
+        identityProvider = new AppUserService();
         persistenceService = new ArchivePersistenceService();
-        persistVisitor = new PersistArchiveVisitor(persistenceService);
-        logQueryService = new ArchiveLogQueryService();
+        persistVisitor = new ArchiveVisitor(persistenceService);
+        logQueryService = new ArchiveLogService();
 
         if (args.length < 1) {
             printUsage();
@@ -73,7 +73,7 @@ public class BeowulfCLI {
         Path targetArchive = Paths.get(args[2]);
 
         Archiver baseArchiver = factory.getArchiver(targetArchive);
-        Archiver archiver = new LoggingArchiver(
+        Archiver archiver = new ArchiverLogger(
                 baseArchiver,
                 identityProvider,
                 persistVisitor);
@@ -94,7 +94,7 @@ public class BeowulfCLI {
         Path targetDir = Paths.get(args[2]);
 
         Archiver baseArchiver = factory.getArchiver(archive);
-        Archiver archiver = new LoggingArchiver(
+        Archiver archiver = new ArchiverLogger(
                 baseArchiver,
                 identityProvider,
                 persistVisitor);
@@ -115,7 +115,7 @@ public class BeowulfCLI {
         }
 
         AppUser user = identityProvider.resolveCurrentUser();
-        List<ArchiveLogEntry> entries = logQueryService.findRecentLogs(user.getId(), limit);
+        List<ArchiveLog> entries = logQueryService.findRecentLogs(user.getId(), limit);
 
         if (entries.isEmpty()) {
             System.out.println("No logs for current user: " + user.getUsername()
@@ -129,7 +129,7 @@ public class BeowulfCLI {
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        for (ArchiveLogEntry entry : entries) {
+        for (ArchiveLog entry : entries) {
             String createdAt = entry.getCreatedAt() != null
                     ? entry.getCreatedAt().format(formatter)
                     : "?";
@@ -164,8 +164,8 @@ public class BeowulfCLI {
                     entry.getSizeBytes());
             System.out.printf(
                     "    Checksum: %s %s%n",
-                    entry.getChecksumType(),
-                    entry.getChecksumValue());
+                    entry.getSplitPartsCount(),
+                    entry.getSplitTotalSize());
             System.out.println();
         }
     }

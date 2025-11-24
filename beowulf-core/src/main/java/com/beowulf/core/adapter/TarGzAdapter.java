@@ -16,7 +16,7 @@ public class TarGzAdapter {
 
     /**
      * Compresses sourceDir into a .tar.gz archive.
-     * 
+     *
      * @param sourceDir     path to file or directory to compress.
      * @param targetArchive path to resulting .tar.gz file.
      */
@@ -28,7 +28,14 @@ public class TarGzAdapter {
             throw new FileNotFoundException("Source directory not found: " + sourceDir);
 
         Path parent = sourceDir.getParent();
-        Path base = parent != null ? parent : sourceDir;
+        Path base;
+
+        String dirName = sourceDir.getFileName() != null ? sourceDir.getFileName().toString() : "";
+        if (dirName.startsWith("beowulf-edit-")) {
+            base = sourceDir;
+        } else {
+            base = parent != null ? parent : sourceDir;
+        }
 
         try (OutputStream filOutputStream = Files.newOutputStream(targetArchive);
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(filOutputStream);
@@ -75,7 +82,7 @@ public class TarGzAdapter {
 
     /**
      * Extracts a tar.gz archive.
-     * 
+     *
      * @param archive   path to existing .tar.gz archive.
      * @param targetDir destination directory.
      */

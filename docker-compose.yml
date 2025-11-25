@@ -11,20 +11,5 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
-  beowulf:
-    build: .
-    container_name: beowulf-cli
-    depends_on:
-      - postgres
-    environment:
-      BEOWULF_DB_URL: jdbc:postgresql://postgres:5432/beowulf_db
-      BEOWULF_DB_USER: beowulf
-      BEOWULF_DB_PASS: beowulf
-    volumes:
-      - ./data:/data
-      - beowulf_user_data:/root/.beowulf
-    entrypoint: ["./beowulf-cli/bin/beowulf-cli"]
-
 volumes:
   pg_data:
-  beowulf_user_data:

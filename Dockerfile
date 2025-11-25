@@ -17,9 +17,7 @@
     
     COPY --from=builder /home/gradle/project/beowulf-cli/build/install/beowulf ./beowulf
     
-    # Per-user Beowulf config (~/.beowulf)
     ENV HOME=/root
     
-    ENTRYPOINT ["./beowulf-cli/bin/beowulf-cli"]
+    ENTRYPOINT ["./beowulf/bin/beowulf"]
     CMD ["help"]
-    

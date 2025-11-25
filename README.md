@@ -20,7 +20,7 @@ It is designed as a coursework project to demonstrate classic design patterns:
 - **UI:** JavaFX 21
 - **Archiving:**
   - [Apache Commons Compress] for ZIP / TAR.GZ
-  - External `rar` binary for RAR 
+  - External `rar` binary for RAR
   - External `unace` binary for ACE (**decompression**)
 - **Database:** PostgreSQL 15
 - **Connection Pool:** HikariCP
@@ -42,7 +42,8 @@ High-level modules:
 ├── build.gradle.kts
 ├── settings.gradle.kts
 └── docker-compose.yml
-````
+```
+
 ---
 
 ## 🧱 Architecture & Design Patterns
@@ -53,32 +54,46 @@ Core abstraction:
 
 ```java
 public interface Archiver {
-    String getName();
+    /**
+     * Compresses the given source directory or file into a single archive file.
+     *
+     * @param sourceDir     path to file or directory to compress
+     * @param targetArchive path to resulting archive file
+     */
     void compress(Path sourceDir, Path targetArchive) throws IOException;
+
+    /**
+     * Extracts the given archive file into the target directory.
+     *
+     * @param archive   path to existing archive
+     * @param targetDir destination directory
+     */
     void decompress(Path archive, Path targetDir) throws IOException;
+
+    String getName();
 }
 ```
 
 Concrete strategies:
 
-* `ZipArchiver` – ZIP archives via `ZipAdapter`
-* `TarGzArchiver` – `.tar.gz` via `TarGzAdapter`
-* `RarArchiver` – `.rar` via external `rar` tool
-* `AceArchiver` – `.ace` via external `unace` tool
+- `ZipArchiver` – ZIP archives via `ZipAdapter`
+- `TarGzArchiver` – `.tar.gz` via `TarGzAdapter`
+- `RarArchiver` – `.rar` via external `rar` tool
+- `AceArchiver` – `.ace` via external `unace` tool
 
 ### Adapter – Wrap Libraries / Binaries
 
 Examples:
 
-* `ZipAdapter` – wraps Apache Commons Compress for ZIP I/O
-* `TarGzAdapter` – wraps tar + gzip streams
-* `RarAdapter` – calls the external `rar` binary via `ProcessBuilder`
+- `ZipAdapter` – wraps Apache Commons Compress for ZIP I/O
+- `TarGzAdapter` – wraps tar + gzip streams
+- `RarAdapter` – calls the external `rar` binary via `ProcessBuilder`
 
-  * Detects `rar` in `PATH`
-  * Throws clear `IOException` if `rar` is missing
-  * GUI/CLI catch this and display a user-friendly error
-  
-* `AceAdapter` – calls the external `unace` binary via `ProcessBuilder`
+  - Detects `rar` in `PATH`
+  - Throws clear `IOException` if `rar` is missing
+  - GUI/CLI catch this and display a user-friendly error
+
+- `AceAdapter` – calls the external `unace` binary via `ProcessBuilder`
 
 This keeps the core `Archiver` logic independent from specific libraries or OS tools.
 
@@ -95,37 +110,37 @@ This is used by both CLI and GUI.
 
 ### Facade – Core Facade for CLI/GUI
 
-The core module exposes a simplified façade (through `ArchiverFactory`, `LoggingArchiver`, and DB services) so that:
+The core module exposes a simplified façade (through `ArchiverFactory`, `ArchiverLogger`, and DB services) so that:
 
-* CLI (`BeowulfCLI`) can just say:
+- CLI (`BeowulfCLI`) can just say:
   `archiver.compress(source, target);`
-* GUI (`BeowulfGUI`) can do the same, without knowing about HikariCP, Flyway, SQL, etc.
+- GUI (`BeowulfGUI`) can do the same, without knowing about HikariCP, Flyway, SQL, etc.
 
 ### Visitor – Logging & Persistence
 
 The **Visitor pattern** is used to decouple archiving operations from database persistence:
 
-* `ArchiveOperationContext`
+- `ArchiveOperation`
 
-  * Holds operation data: `operation`, `status`, `archivePath`, `targetPath`, `format`, `compression`, `checksumType`, `checksumValue`, `sizeBytes`, `durationMs`, `user`, etc.
-* `PersistArchiveVisitor`
+  - Holds operation data: `operation`, `status`, `archivePath`, `targetPath`, `format`, `compression`, `checksumType`, `checksumValue`, `sizeBytes`, `durationMs`, `user`, etc.
 
-  * Visitor that calls `ArchivePersistenceService` to persist the context into DB
-* `LoggingArchiver`
+- `ArchiveVisitor`
 
-  * Wraps a concrete `Archiver`
-  * Measures time and status, builds an `ArchiveOperationContext`
-  * Calls `accept(visitor)` to persist logs
+  - Visitor that calls `ArchivePersistenceService` to persist the context into DB
 
-So adding “logging” required 0 changes to the basic archivers — just wrap them in `LoggingArchiver`.
+- `ArchiverLogger`
+
+  - Wraps a concrete `Archiver`
+  - Measures time and status, builds an `ArchiveOperation`
+  - Calls `accept(visitor)` to persist logs
+
+So adding “logging” required 0 changes to the basic archivers — just wrap them in `ArchiverLogger`.
 
 ---
 
 ## 🗄️ Database & Logging
 
 ### Schema (simplified)
-
-Migration `V1__init.sql` via Flyway creates tables:
 
 ```sql
 CREATE TABLE IF NOT EXISTS app_user (
@@ -158,42 +173,53 @@ CREATE TABLE IF NOT EXISTS archive_log (
     archive_id  UUID      NOT NULL REFERENCES archive(id) ON DELETE CASCADE,
     operation   VARCHAR(20) NOT NULL, -- COMPRESS / DECOMPRESS
     status      VARCHAR(20) NOT NULL, -- SUCCESS / FAILED
+    target_path TEXT        NOT NULL,
     duration_ms BIGINT      NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    -- optional later migrations may add extra columns (e.g. target_path)
+);
+
+CREATE TABLE IF NOT EXISTS archive_part (
+    id          BIGSERIAL PRIMARY KEY,
+    archive_id  UUID      NOT NULL REFERENCES archive(id) ON DELETE CASCADE,
+    part_index  INT       NOT NULL,
+    path        TEXT      NOT NULL,
+    size_bytes  BIGINT    NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 Key ideas:
 
-* `app_user` – logical user of the app.
-* `checksum` – stored checksums (`CRC32`, `SHA256`, etc.).
-* `archive` – metadata about archive files: format, compression type, size, path.
-* `archive_log` – history of operations per user + outcome and duration.
+- `app_user` – logical user of the app.
+- `checksum` – stored checksums (`CRC32`, `SHA256`, etc.).
+- `archive` – metadata about archive files: format, compression type, size, path.
+- `archive_log` – history of operations per user + outcome and duration.
+- `archive_part` - split archive part
 
 ### User Identity
 
-`LocalUserIdentityProvider`:
+`AppUserService`:
 
-* Derives a stable `AppUser` from local environment (`user.name`, home dir, etc).
-* Stores it (if needed) in a config under `~/.beowulf`.
-* Ensures all operations are associated with the same `app_user.id`.
+- Derives a stable `AppUser` from local environment (`user.name`, home dir, etc).
+- Stores it (if needed) in a config under `~/.beowulf`.
+- Ensures all operations are associated with the same `app_user.id`.
 
 ### Persistence Services
 
-* `ArchivePersistenceService`
+- `ArchivePersistenceService`
 
-  * Uses JDBC + HikariCP (`DataSourceFactory.getDataSource()`)
-  * Within one transaction:
+  - Uses JDBC + HikariCP (`DataSourceFactory.getDataSource()`)
+  - Within one transaction:
 
-    * upserts `app_user`
-    * inserts `checksum`
-    * inserts `archive`
-    * inserts `archive_log`
-* `ArchiveLogQueryService`
+    - upserts `app_user`
+    - inserts `checksum`
+    - inserts `archive`
+    - inserts `archive_log`
 
-  * Executes read-only queries joining `archive_log`, `archive`, `checksum`
-  * Returns `ArchiveLogEntry` DTOs for GUI / CLI to render
+- `ArchiveLogService`
+
+  - Executes read-only queries joining `archive_log`, `archive`, `checksum`
+  - Returns `ArchiveLog` DTOs for GUI / CLI to render
 
 All connections are taken from HikariCP; Flyway applies migrations before first use (`DbMigrations.migrate()`).
 
@@ -231,9 +257,9 @@ beowulf <command> [args...]
 
 Supported commands:
 
-* `compress <sourceDirOrFile> <targetArchive>`
-* `decompress <archiveFile> <targetDir>`
-* `logs` – show recent DB logs for current `app_user`
+- `compress <sourceDirOrFile> <targetArchive>`
+- `decompress <archiveFile> <targetDir>`
+- `logs` – show recent DB logs for current `app_user`
 
 #### Examples (local)
 
@@ -267,54 +293,59 @@ Module: `beowulf-gui`
 
 Requires:
 
-* JavaFX runtime (handled via Gradle dependencies)
-* PostgreSQL running and reachable from `DataSourceFactory` configuration.
+- JavaFX runtime (handled via Gradle dependencies)
+- PostgreSQL running and reachable from `DataSourceFactory` configuration.
 
 ### GUI Features
 
-* **Compress tab**
+- **Compress tab**
 
-  * Select **source** (file or folder) via `Browse…` or paste path manually.
-  * Select **output folder** for archive.
-  * Choose **archive format**: `ZIP`, `TAR.GZ`, `RAR`.
-  * Archive name:
+  - Select **source** (file or folder) via `Browse…` or paste path manually.
+  - Select **output folder** for archive.
+  - Choose **archive format**: `ZIP`, `TAR.GZ`, `RAR`.
+  - Archive name:
 
-    * User types any base name.
-    * Placeholder shows example with chosen extension (`my-archive.zip`, `...tar.gz`, `...rar`).
-    * On compress, the correct extension is always added.
-  * Progress:
+    - User types any base name.
+    - Placeholder shows example with chosen extension (`my-archive.zip`, `...tar.gz`, `...rar`).
+    - On compress, the correct extension is always added.
 
-    * Progress bar shown for at least 2 seconds (even on fast operations).
-    * On success – info modal; on failure – error modal with message (including “RAR not installed” etc.).
+  - Progress:
 
-* **Decompress tab**
+    - Progress bar shown for at least 2 seconds (even on fast operations).
+    - On success – info modal; on failure – error modal with message (including “RAR not installed” etc.).
 
-  * Select archive file (`.zip`, `.tar.gz`, `.rar`, etc.).
-  * Select or paste output directory.
-  * Same progress bar + success/error modal behaviour.
+- **Decompress tab**
 
-* **Logs tab**
+  - Select archive file (`.zip`, `.tar.gz`, `.rar`, etc.).
+  - Select or paste output directory.
+  - Same progress bar + success/error modal behaviour.
 
-  * Table showing:
+- **Logs tab**
 
-    * `Time` (local, `HH:mm:ss yyyy-MM-dd`)
-    * `Operation` (`COMPRESS` / `DECOMPRESS`)
-    * `Status` (`SUCCESS` / `FAILED`)
-    * `Path`:
+  - Table showing:
 
-      * `COMPRESS` – full path to archive file
-      * `DECOMPRESS` – output directory
-    * `Format`, `Compression`, `Size`, `Duration`
-  * Double-click a row:
+    - `Time` (local, `HH:mm:ss yyyy-MM-dd`)
+    - `Operation` (`COMPRESS` / `DECOMPRESS`)
+    - `Status` (`SUCCESS` / `FAILED`)
+    - `Path`:
 
-    * Opens a detail modal:
+      - `COMPRESS` – full path to archive file
+      - `DECOMPRESS` – output directory
+      - `UPDATE` - full path to archive file
 
-      * Time -> formatted as `HH:mm dd MMMM yyyy`
-      * Status colored (green/red)
-      * Clickable `Path` link:
+    - `Format`, `Compression`, `Size`, `Duration`, `Split archive`
 
-        * For files – opens containing folder in OS file manager
-        * For directories – opens that directory
+  - Double-click a row:
+
+    - Opens a detail modal:
+
+      - Time -> formatted as `HH:mm dd MMMM yyyy`
+      - Status colored (green/red)
+      - Split archive parts info
+      - Clickable `Path` link:
+
+        - For files – opens containing folder in OS file manager
+        - For directories – opens that directory
 
 All GUI operations are performed on background `Task`s and marshalled back to the JavaFX thread.
 
@@ -324,7 +355,7 @@ All GUI operations are performed on background `Task`s and marshalled back to th
 
 ### Docker Compose
 
-Example `docker-compose.yml` (no env vars):
+Example `docker-compose.yml:
 
 ```yaml
 services:
@@ -340,23 +371,12 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
-  beowulf:
-    build: .
-    container_name: beowulf-cli
-    depends_on:
-      - postgres
-    volumes:
-      - ./data:/data
-      - beowulf_user_data:/root/.beowulf
-    entrypoint: ["./beowulf-cli/bin/beowulf-cli"]
-
 volumes:
   pg_data:
-  beowulf_user_data:
 ```
 
-* Postgres is exposed on `localhost:5432` for host tools / GUI.
-* CLI container sees it as `postgres:5432` (service name).
+- Postgres is exposed on `localhost:5432` for host tools / GUI.
+- CLI container sees it as `postgres:5432` (service name).
 
 ### Running CLI in Docker
 
@@ -436,10 +456,10 @@ Similar tests can be added for TAR.GZ and RAR (where supported).
 
 The **`reports/`** folder in the project root contains the **course / lab reports** for this project, including:
 
-* requirements and problem statement;
-* UML diagrams (class diagrams, component diagrams, etc.);
-* explanation of patterns (Strategy, Adapter, Factory Method, Facade, Visitor);
-* database design and migration strategy;
-* deployment and usage patterns (CLI, GUI, Docker, DB).
+- requirements and problem statement;
+- UML diagrams (class diagrams, component diagrams, etc.);
+- explanation of patterns (Strategy, Adapter, Factory Method, Facade, Visitor);
+- database design and migration strategy;
+- deployment and usage patterns (CLI, GUI, Docker, DB).
 
 These reports are part of the formal documentation for the coursework and complement this README.

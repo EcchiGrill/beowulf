@@ -347,7 +347,7 @@ Requires:
         - For files – opens containing folder in OS file manager
         - For directories – opens that directory
 
-All GUI operations are performed on background `Task`s and marshalled back to the JavaFX thread.
+All GUI operations are performed on background tasks and marshalled back to the JavaFX thread.
 
 ---
 

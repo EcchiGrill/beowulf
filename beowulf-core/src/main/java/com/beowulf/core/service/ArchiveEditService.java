@@ -1,14 +1,14 @@
-package com.beowulf.core.facade;
+package com.beowulf.core.service;
 
 import com.beowulf.core.db.DataSourceFactory;
 import com.beowulf.core.factory.ArchiverFactory;
 import com.beowulf.core.interfaces.Archiver;
-import com.beowulf.core.model.ArchiveOperation;
-import com.beowulf.core.model.ArchiveVisitor;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 import com.beowulf.core.utils.ArchiveMetadataUtil;
 import com.beowulf.core.utils.FileTreeUtils;
+import com.beowulf.core.visitor.ArchiveOperation;
+import com.beowulf.core.visitor.ArchiveVisitor;
 
 import javax.sql.DataSource;
 import java.io.IOException;

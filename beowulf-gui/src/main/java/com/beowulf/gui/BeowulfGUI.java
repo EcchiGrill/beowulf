@@ -2,17 +2,17 @@ package com.beowulf.gui;
 
 import com.beowulf.core.db.DataSourceFactory;
 import com.beowulf.core.db.DbMigrations;
-import com.beowulf.core.facade.ArchiveEditService;
-import com.beowulf.core.facade.ArchiveLogService;
-import com.beowulf.core.facade.ArchivePersistenceService;
+import com.beowulf.core.decorator.ArchiverLogger;
 import com.beowulf.core.factory.ArchiverFactory;
 import com.beowulf.core.interfaces.Archiver;
 import com.beowulf.core.model.ArchiveLog;
-import com.beowulf.core.model.ArchiveVisitor;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
-import com.beowulf.core.visitor.ArchiverLogger;
+import com.beowulf.core.visitor.ArchiveVisitor;
 import com.beowulf.core.model.ArchivePart;
+import com.beowulf.core.service.ArchiveEditService;
+import com.beowulf.core.service.ArchiveLogService;
+import com.beowulf.core.service.ArchivePersistenceService;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Application;

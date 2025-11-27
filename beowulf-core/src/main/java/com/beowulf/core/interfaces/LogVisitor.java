@@ -1,6 +1,6 @@
 package com.beowulf.core.interfaces;
 
-import com.beowulf.core.model.ArchiveOperation;
+import com.beowulf.core.visitor.ArchiveOperation;
 
 /**
  * Interface for objects that can visit a loggable object.

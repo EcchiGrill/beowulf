@@ -1,7 +1,7 @@
-package com.beowulf.core.model;
+package com.beowulf.core.visitor;
 
-import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.interfaces.LogVisitor;
+import com.beowulf.core.service.ArchivePersistenceService;
 
 public class ArchiveVisitor implements LogVisitor {
 

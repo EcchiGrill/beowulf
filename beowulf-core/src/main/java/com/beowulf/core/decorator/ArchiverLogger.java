@@ -1,12 +1,12 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.decorator;
 
-import com.beowulf.core.facade.ArchivePersistenceService;
 import com.beowulf.core.interfaces.Archiver;
-import com.beowulf.core.model.ArchiveOperation;
-import com.beowulf.core.model.ArchiveVisitor;
+import com.beowulf.core.service.ArchivePersistenceService;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 import com.beowulf.core.utils.ArchiveMetadataUtil;
+import com.beowulf.core.visitor.ArchiveOperation;
+import com.beowulf.core.visitor.ArchiveVisitor;
 
 import java.io.IOException;
 import java.nio.file.Files;

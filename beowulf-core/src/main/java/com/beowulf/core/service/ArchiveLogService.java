@@ -1,4 +1,4 @@
-package com.beowulf.core.facade;
+package com.beowulf.core.service;
 
 import com.beowulf.core.db.DataSourceFactory;
 import com.beowulf.core.model.ArchiveLog;

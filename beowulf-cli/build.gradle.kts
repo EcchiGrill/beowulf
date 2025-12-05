@@ -8,4 +8,5 @@ dependencies {
 
 application {
     mainClass = "com.beowulf.cli.BeowulfCLI"
+    applicationName = "beowulf"
 }

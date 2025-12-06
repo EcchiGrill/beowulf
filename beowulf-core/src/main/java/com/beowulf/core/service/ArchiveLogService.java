@@ -1,6 +1,6 @@
 package com.beowulf.core.service;
 
-import com.beowulf.core.db.DataSourceFactory;
+import com.beowulf.core.db.Database;
 import com.beowulf.core.model.ArchiveLog;
 import com.beowulf.core.model.ArchivePart;
 
@@ -16,7 +16,7 @@ public class ArchiveLogService {
     private final DataSource dataSource;
 
     public ArchiveLogService() {
-        this.dataSource = DataSourceFactory.getDataSource();
+        this.dataSource = Database.getDataSource();
     }
 
     public List<ArchivePart> findArchiveParts(UUID archiveId) {

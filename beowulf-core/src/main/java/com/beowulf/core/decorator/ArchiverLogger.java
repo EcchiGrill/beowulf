@@ -1,11 +1,11 @@
 package com.beowulf.core.decorator;
 
 import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.model.ArchiveOperation;
 import com.beowulf.core.service.ArchivePersistenceService;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 import com.beowulf.core.utils.ArchiveMetadataUtil;
-import com.beowulf.core.visitor.ArchiveOperation;
 import com.beowulf.core.visitor.ArchiveVisitor;
 
 import java.io.IOException;
@@ -16,44 +16,26 @@ import java.util.concurrent.TimeUnit;
 public class ArchiverLogger implements Archiver {
 
     private final Archiver delegate;
-    private final AppUserService identityProvider;
+    private final AppUserService userService;
     private final ArchiveVisitor visitor;
-    private final String operationOverride;
 
-    public ArchiverLogger(Archiver delegate,
-            AppUserService identityProvider,
-            ArchiveVisitor visitor) {
-        this(delegate, identityProvider, visitor, null);
-    }
-
-    public ArchiverLogger(Archiver delegate,
-            AppUserService identityProvider,
-            ArchivePersistenceService persistenceService) {
-        this(delegate, identityProvider, new ArchiveVisitor(persistenceService), null);
-    }
-
-    public ArchiverLogger(Archiver delegate,
-            AppUserService identityProvider,
-            ArchiveVisitor visitor,
-            String operationOverride) {
+    public ArchiverLogger(Archiver delegate) {
         this.delegate = delegate;
-        this.identityProvider = identityProvider;
-        this.visitor = visitor;
-        this.operationOverride = operationOverride;
+        this.userService = new AppUserService();
+        this.visitor = new ArchiveVisitor(new ArchivePersistenceService());
     }
 
     @Override
     public void compress(Path sourceDir, Path targetArchive) throws IOException {
-        AppUser user = identityProvider.resolveCurrentUser();
+        AppUser user = userService.resolveCurrentUser();
         long started = System.nanoTime();
 
-        ArchiveMetadataUtil.ArchiveMeta meta = ArchiveMetadataUtil.detect(targetArchive);
+        var meta = ArchiveMetadataUtil.detect(targetArchive);
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        ctx.setOperation(operationOverride != null ? operationOverride : "COMPRESS");
-        ctx.setArchivePath(targetArchive.toAbsolutePath().toString());
-        ctx.setTargetPath(null);
+        ctx.setOperation("COMPRESS");
+        ctx.setArchivePath(targetArchive.toString());
         ctx.setFormat(meta.format());
         ctx.setCompression(meta.compression());
         ctx.setChecksumType("SHA256");
@@ -64,30 +46,27 @@ public class ArchiverLogger implements Archiver {
             ctx.setStatus("SUCCESS");
             ctx.setSizeBytes(Files.size(targetArchive));
             ctx.setChecksumValue(ArchiveMetadataUtil.sha256(targetArchive));
-        } catch (IOException error) {
+        } catch (IOException e) {
             ctx.setStatus("FAILED");
-            ctx.setChecksumValue(null);
-            ctx.setSizeBytes(0L);
-            throw error;
+            throw e;
         } finally {
-            long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-            ctx.setDurationMs(durationMs);
+            ctx.setDurationMs(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
             visitor.visit(ctx);
         }
     }
 
     @Override
     public void decompress(Path archive, Path targetDir) throws IOException {
-        AppUser user = identityProvider.resolveCurrentUser();
+        AppUser user = userService.resolveCurrentUser();
         long started = System.nanoTime();
 
-        ArchiveMetadataUtil.ArchiveMeta meta = ArchiveMetadataUtil.detect(archive);
+        var meta = ArchiveMetadataUtil.detect(archive);
 
         ArchiveOperation ctx = new ArchiveOperation();
         ctx.setUser(user);
-        ctx.setOperation(operationOverride != null ? operationOverride : "DECOMPRESS");
-        ctx.setArchivePath(archive.toAbsolutePath().toString());
-        ctx.setTargetPath(targetDir.toAbsolutePath().toString());
+        ctx.setOperation("DECOMPRESS");
+        ctx.setArchivePath(archive.toString());
+        ctx.setTargetPath(targetDir.toString());
         ctx.setFormat(meta.format());
         ctx.setCompression(meta.compression());
         ctx.setChecksumType("SHA256");
@@ -98,14 +77,11 @@ public class ArchiverLogger implements Archiver {
             ctx.setStatus("SUCCESS");
             ctx.setSizeBytes(Files.size(archive));
             ctx.setChecksumValue(ArchiveMetadataUtil.sha256(archive));
-        } catch (IOException error) {
+        } catch (IOException e) {
             ctx.setStatus("FAILED");
-            ctx.setChecksumValue(null);
-            ctx.setSizeBytes(0L);
-            throw error;
+            throw e;
         } finally {
-            long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-            ctx.setDurationMs(durationMs);
+            ctx.setDurationMs(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
             visitor.visit(ctx);
         }
     }

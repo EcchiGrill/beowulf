@@ -1,13 +1,12 @@
 package com.beowulf.core.service;
 
-import com.beowulf.core.db.DataSourceFactory;
-import com.beowulf.core.factory.ArchiverFactory;
-import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.db.Database;
+import com.beowulf.core.facade.ArchiveService;
+import com.beowulf.core.model.ArchiveOperation;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
 import com.beowulf.core.utils.ArchiveMetadataUtil;
 import com.beowulf.core.utils.FileTreeUtils;
-import com.beowulf.core.visitor.ArchiveOperation;
 import com.beowulf.core.visitor.ArchiveVisitor;
 
 import javax.sql.DataSource;
@@ -21,18 +20,18 @@ import java.util.concurrent.TimeUnit;
 
 public class ArchiveEditService {
 
-    private final ArchiverFactory archiverFactory;
+    private final ArchiveService archiveService;
     private final AppUserService identityProvider;
     private final ArchiveVisitor persistVisitor;
     private final DataSource dataSource;
 
-    public ArchiveEditService(ArchiverFactory archiverFactory,
+    public ArchiveEditService(ArchiveService archiveService,
             AppUserService identityProvider,
             ArchiveVisitor persistVisitor) {
-        this.archiverFactory = archiverFactory;
+        this.archiveService = archiveService;
         this.identityProvider = identityProvider;
         this.persistVisitor = persistVisitor;
-        this.dataSource = DataSourceFactory.getDataSource();
+        this.dataSource = Database.getDataSource();
     }
 
     /**
@@ -71,7 +70,6 @@ public class ArchiveEditService {
         Objects.requireNonNull(targetArchive, "targetArchive");
 
         AppUser user = identityProvider.resolveCurrentUser();
-        Archiver archiver = archiverFactory.getArchiver(targetArchive);
 
         long started = System.nanoTime();
         String status = "SUCCESS";
@@ -79,7 +77,7 @@ public class ArchiveEditService {
         String checksumValue = null;
 
         try {
-            archiver.compress(sourceDir, targetArchive);
+            archiveService.compress(sourceDir, targetArchive);
             sizeBytes = Files.size(targetArchive);
             checksumValue = ArchiveMetadataUtil.sha256(targetArchive);
         } catch (IOException e) {

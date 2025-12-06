@@ -1,10 +1,8 @@
 package com.beowulf.gui;
 
-import com.beowulf.core.db.DataSourceFactory;
-import com.beowulf.core.db.DbMigrations;
-import com.beowulf.core.decorator.ArchiverLogger;
-import com.beowulf.core.factory.ArchiverFactory;
-import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.db.Database;
+import com.beowulf.core.db.DatabaseMigrations;
+import com.beowulf.core.facade.ArchiveService;
 import com.beowulf.core.model.ArchiveLog;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
@@ -58,7 +56,7 @@ public class BeowulfGUI extends Application {
     private ArchivePersistenceService persistenceService;
     private ArchiveLogService logQueryService;
     private ArchiveVisitor persistVisitor;
-    private ArchiverFactory archiverFactory;
+    private ArchiveService archiveService;
     private ArchiveEditService editService;
 
     private Stage primaryStage;
@@ -124,13 +122,13 @@ public class BeowulfGUI extends Application {
     }
 
     private void initCore() {
-        DbMigrations.migrate();
+        DatabaseMigrations.migrate();
         this.identityProvider = new AppUserService();
         this.persistenceService = new ArchivePersistenceService();
         this.logQueryService = new ArchiveLogService();
         this.persistVisitor = new ArchiveVisitor(persistenceService);
-        this.archiverFactory = new ArchiverFactory();
-        this.editService = new ArchiveEditService(archiverFactory, identityProvider, persistVisitor);
+        this.archiveService = new ArchiveService();
+        this.editService = new ArchiveEditService(archiveService, identityProvider, persistVisitor);
     }
 
     private void loadIcons() {
@@ -346,8 +344,7 @@ public class BeowulfGUI extends Application {
             Task<Void> task = new Task<>() {
                 @Override
                 protected Void call() throws Exception {
-                    Archiver archiver = createLoggingArchiver(targetArchive);
-                    archiver.compress(sourcePath, targetArchive);
+                    archiveService.compress(sourcePath, targetArchive);
                     return null;
                 }
 
@@ -519,8 +516,7 @@ public class BeowulfGUI extends Application {
             Task<Void> task = new Task<>() {
                 @Override
                 protected Void call() throws Exception {
-                    Archiver archiver = createLoggingArchiver(archive);
-                    archiver.decompress(archive, targetDir);
+                    archiveService.decompress(archive, targetDir);
                     return null;
                 }
 
@@ -1049,6 +1045,12 @@ public class BeowulfGUI extends Application {
 
         MenuItem delete = new MenuItem("Delete");
         delete.setOnAction(e -> handleEditDelete());
+        delete.visibleProperty().bind(editTreeView.getSelectionModel().selectedItemProperty().map(item -> {
+            if (item == null || currentSession == null)
+                return false;
+            Path selectedPath = item.getValue().getPath();
+            return !selectedPath.equals(currentSession.workDir);
+        }));
 
         return new ContextMenu(newFolder, addFile, rename, delete);
     }
@@ -1103,8 +1105,7 @@ public class BeowulfGUI extends Application {
         Task<Void> task = new Task<>() {
             @Override
             protected Void call() throws Exception {
-                Archiver archiver = createLoggingArchiver(archivePath);
-                archiver.decompress(archivePath, root.workDir);
+                archiveService.decompress(archivePath, root.workDir);
                 return null;
             }
 
@@ -1176,8 +1177,7 @@ public class BeowulfGUI extends Application {
         Task<Void> task = new Task<>() {
             @Override
             protected Void call() throws Exception {
-                Archiver archiver = createLoggingArchiver(nestedArchive);
-                archiver.decompress(nestedArchive, nested.workDir);
+                archiveService.decompress(nestedArchive, nested.workDir);
                 return null;
             }
 
@@ -1667,6 +1667,17 @@ public class BeowulfGUI extends Application {
 
         TableColumn<LogRow, String> tsCol = new TableColumn<>("Time");
         tsCol.setCellValueFactory(new PropertyValueFactory<>("createdAt"));
+        tsCol.setComparator((a, b) -> {
+            LogRow ra = logRows.stream().filter(x -> x.getCreatedAt().equals(a)).findFirst().orElse(null);
+            LogRow rb = logRows.stream().filter(x -> x.getCreatedAt().equals(b)).findFirst().orElse(null);
+
+            if (ra == null || ra.getCreatedAtRaw() == null)
+                return 1;
+            if (rb == null || rb.getCreatedAtRaw() == null)
+                return -1;
+
+            return ra.getCreatedAtRaw().compareTo(rb.getCreatedAtRaw());
+        });
 
         TableColumn<LogRow, String> opCol = new TableColumn<>("Operation");
         opCol.setCellValueFactory(new PropertyValueFactory<>("operation"));
@@ -1891,11 +1902,6 @@ public class BeowulfGUI extends Application {
                 primaryStage.setMaximized(wasMax);
             }
         });
-    }
-
-    private Archiver createLoggingArchiver(Path archivePathOrTarget) {
-        Archiver base = archiverFactory.getArchiver(archivePathOrTarget);
-        return new ArchiverLogger(base, identityProvider, persistVisitor);
     }
 
     private void reloadLogs() {
@@ -2155,7 +2161,7 @@ public class BeowulfGUI extends Application {
     @Override
     public void stop() {
         closeAllEditSessions();
-        DataSourceFactory.close();
+        Database.close();
     }
 
     public static void main(String[] args) {
@@ -2295,4 +2301,62 @@ public class BeowulfGUI extends Application {
         boolean canSave;
         EditSession parent;
     }
+
 }
+
+    
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+
+
+
+    
+    
+    
+
+    
+        
+        
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+    
+        
+    
+
+
+
+    
+    
+    
+    
+    

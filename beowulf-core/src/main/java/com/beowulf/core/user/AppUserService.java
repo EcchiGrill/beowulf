@@ -1,6 +1,6 @@
 package com.beowulf.core.user;
 
-import com.beowulf.core.db.DataSourceFactory;
+import com.beowulf.core.db.Database;
 
 import javax.sql.DataSource;
 import java.io.*;
@@ -19,7 +19,7 @@ public class AppUserService {
     private final DataSource dataSource;
 
     public AppUserService() {
-        this.dataSource = DataSourceFactory.getDataSource();
+        this.dataSource = Database.getDataSource();
     }
 
     public AppUser resolveCurrentUser() {

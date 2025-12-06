@@ -40,7 +40,7 @@ public class ZipAdapter {
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
                 ZipArchiveOutputStream zipArchiveOutputStream = new ZipArchiveOutputStream(bufferedOutputStream)) {
 
-            zipArchiveOutputStream.setLevel(ZipArchiveOutputStream.STORED);
+            zipArchiveOutputStream.setLevel(ZipArchiveOutputStream.DEFAULT_COMPRESSION);
 
             Files.walk(sourceDir)
                     .forEach(path -> {

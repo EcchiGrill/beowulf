@@ -1,15 +1,11 @@
 package com.beowulf.cli;
 
-import com.beowulf.core.db.DbMigrations;
-import com.beowulf.core.decorator.ArchiverLogger;
-import com.beowulf.core.factory.ArchiverFactory;
-import com.beowulf.core.interfaces.Archiver;
+import com.beowulf.core.db.DatabaseMigrations;
+import com.beowulf.core.facade.ArchiveService;
 import com.beowulf.core.model.ArchiveLog;
 import com.beowulf.core.service.ArchiveLogService;
-import com.beowulf.core.service.ArchivePersistenceService;
 import com.beowulf.core.user.AppUser;
 import com.beowulf.core.user.AppUserService;
-import com.beowulf.core.visitor.ArchiveVisitor;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,20 +15,16 @@ import java.util.List;
 
 public class BeowulfCLI {
 
-    private static final ArchiverFactory factory = new ArchiverFactory();
+    private static final ArchiveService archiveService = new ArchiveService();
 
     private static AppUserService identityProvider;
-    private static ArchivePersistenceService persistenceService;
-    private static ArchiveVisitor persistVisitor;
     private static ArchiveLogService logQueryService;
 
     public static void main(String[] args) {
 
-        DbMigrations.migrate();
+        DatabaseMigrations.migrate();
 
         identityProvider = new AppUserService();
-        persistenceService = new ArchivePersistenceService();
-        persistVisitor = new ArchiveVisitor(persistenceService);
         logQueryService = new ArchiveLogService();
 
         if (args.length < 1) {
@@ -72,14 +64,8 @@ public class BeowulfCLI {
         Path sourceDir = Paths.get(args[1]);
         Path targetArchive = Paths.get(args[2]);
 
-        Archiver baseArchiver = factory.getArchiver(targetArchive);
-        Archiver archiver = new ArchiverLogger(
-                baseArchiver,
-                identityProvider,
-                persistVisitor);
-
-        System.out.println("→ Compressing using " + archiver.getName());
-        archiver.compress(sourceDir, targetArchive);
+        System.out.println("→ Compressing...");
+        archiveService.compress(sourceDir, targetArchive);
         System.out.println("✓ Done: " + targetArchive);
     }
 
@@ -93,14 +79,8 @@ public class BeowulfCLI {
         Path archive = Paths.get(args[1]);
         Path targetDir = Paths.get(args[2]);
 
-        Archiver baseArchiver = factory.getArchiver(archive);
-        Archiver archiver = new ArchiverLogger(
-                baseArchiver,
-                identityProvider,
-                persistVisitor);
-
-        System.out.println("→ Decompressing using " + archiver.getName());
-        archiver.decompress(archive, targetDir);
+        System.out.println("→ Decompressing...");
+        archiveService.decompress(archive, targetDir);
         System.out.println("✓ Extracted to: " + targetDir);
     }
 

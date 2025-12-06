@@ -1,6 +1,5 @@
-package com.beowulf.core.visitor;
+package com.beowulf.core.model;
 
-import com.beowulf.core.model.ArchivePart;
 import com.beowulf.core.user.AppUser;
 
 import java.util.ArrayList;

@@ -1,9 +1,9 @@
 package com.beowulf.core.service;
 
-import com.beowulf.core.db.DataSourceFactory;
+import com.beowulf.core.db.Database;
+import com.beowulf.core.model.ArchiveOperation;
 import com.beowulf.core.model.ArchivePart;
 import com.beowulf.core.user.AppUser;
-import com.beowulf.core.visitor.ArchiveOperation;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -15,7 +15,7 @@ public class ArchivePersistenceService {
     private final DataSource dataSource;
 
     public ArchivePersistenceService() {
-        this.dataSource = DataSourceFactory.getDataSource();
+        this.dataSource = Database.getDataSource();
     }
 
     /**

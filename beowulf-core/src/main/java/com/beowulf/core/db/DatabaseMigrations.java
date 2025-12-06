@@ -4,13 +4,13 @@ import org.flywaydb.core.Flyway;
 
 import javax.sql.DataSource;
 
-public final class DbMigrations {
+public final class DatabaseMigrations {
 
-    private DbMigrations() {
+    private DatabaseMigrations() {
     }
 
     public static void migrate() {
-        DataSource dataSource = DataSourceFactory.getDataSource();
+        DataSource dataSource = Database.getDataSource();
 
         Flyway flyway = Flyway.configure()
                 .dataSource(dataSource)

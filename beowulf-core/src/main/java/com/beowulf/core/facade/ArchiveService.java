@@ -1,5 +1,6 @@
 package com.beowulf.core.facade;
 
+import com.beowulf.core.decorator.ArchiverLogger;
 import com.beowulf.core.factory.ArchiverFactory;
 import com.beowulf.core.interfaces.Archiver;
 
@@ -18,7 +19,10 @@ public class ArchiveService {
 
     public void compress(Path sourceDir, Path targetArchive) throws IOException {
         Archiver archiver = factory.getArchiver(targetArchive);
-        archiver.compress(sourceDir, targetArchive);
+
+        Archiver loggedArchiver = new ArchiverLogger(archiver);
+
+        loggedArchiver.compress(sourceDir, targetArchive);
     }
 
     /**
@@ -30,6 +34,9 @@ public class ArchiveService {
 
     public void decompress(Path archive, Path targetDir) throws IOException {
         Archiver archiver = factory.getArchiver(archive);
-        archiver.decompress(archive, targetDir);
+
+        Archiver loggedArchiver = new ArchiverLogger(archiver);
+
+        loggedArchiver.decompress(archive, targetDir);
     }
 }

@@ -5,11 +5,11 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
 
-public final class DataSourceFactory {
+public final class Database {
 
     private static HikariDataSource dataSource;
 
-    private DataSourceFactory() {
+    private Database() {
     }
 
     public static DataSource getDataSource() {
